@@ -57,4 +57,35 @@
   <ItemGroup>
     <Folder Include="Properties" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include=".gitkeep" />
+    <None Include="README.md" />
+    <None Include="DeployQueryVault.ps1" />
+  </ItemGroup>
+  <ItemGroup>
+    <Build Include="PartitionFunction.sql" />
+    <Build Include="PartitionScheme.sql" />
+    <Build Include="RunMetadata.sql" />
+    <Build Include="DatabaseConfig.sql" />
+    <Build Include="query_store_query.sql" />
+    <Build Include="query_store_query_text.sql" />
+    <Build Include="query_store_plan.sql" />
+    <Build Include="query_store_runtime_stats.sql" />
+    <Build Include="query_store_runtime_stats_interval.sql" />
+    <Build Include="query_store_wait_stats.sql" />
+    <Build Include="query_store_query_PartitionMaintenance.sql" />
+    <Build Include="query_store_query_text_PartitionMaintenance.sql" />
+    <Build Include="query_store_plan_PartitionMaintenance.sql" />
+    <Build Include="query_store_runtime_stats_PartitionMaintenance.sql" />
+    <Build Include="query_store_runtime_stats_interval_PartitionMaintenance.sql" />
+    <Build Include="query_store_wait_stats_PartitionMaintenance.sql" />
+    <Build Include="usp_ManagePartitions.sql" />
+    <Build Include="usp_ArchiveQueryStore.sql" />
+    <Build Include="usp_InitializeDatabase.sql" />
+    <Build Include="usp_GetArchiveSummary.sql" />
+    <Build Include="CreateArchiveJob_Template.sql" />
+    <Build Include="CreateArchiveJob_AllDatabases.sql" />
+    <Build Include="Deploy.sql" />
+    <Build Include="Deploy_Standalone.sql" />
+  </ItemGroup>
 </Project>

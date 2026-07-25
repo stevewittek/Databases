@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="QueryVault/QueryVault.sqlproj">
+    <Build />
+    <Deploy />
+  </Project>
+</Solution>

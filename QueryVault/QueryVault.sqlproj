@@ -7,7 +7,7 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectVersion>4.1</ProjectVersion>
     <ProjectGuid>{4f4f13ab-3526-4e3f-9fa4-076a38247f25}</ProjectGuid>
-    <DSP>Microsoft.Data.Tools.Schema.Sql.Sql170DatabaseSchemaProvider</DSP>
+    <DSP>Microsoft.Data.Tools.Schema.Sql.Sql150DatabaseSchemaProvider</DSP>
     <OutputType>Database</OutputType>
     <RootPath>
     </RootPath>
@@ -22,6 +22,9 @@
     <SqlServerVerification>False</SqlServerVerification>
     <IncludeCompositeObjects>True</IncludeCompositeObjects>
     <TargetDatabaseSet>True</TargetDatabaseSet>
+    <CompatibilityMode>150</CompatibilityMode>
+    <AllowSnapshotIsolation>True</AllowSnapshotIsolation>
+    <ReadCommittedSnapshot>True</ReadCommittedSnapshot>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <OutputPath>bin\Release\</OutputPath>
@@ -56,11 +59,34 @@
   <Import Condition="'$(SQLDBExtensionsRefPath)' == ''" Project="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\SSDT\Microsoft.Data.Tools.Schema.SqlTasks.targets" />
   <ItemGroup>
     <Folder Include="Properties" />
+    <Folder Include="Tables" />
+    <Folder Include="Tables\Core" />
+    <Folder Include="Tables\PartitionMaintenance" />
+    <Folder Include="Tables\QueryStore" />
+    <Folder Include="Jobs" />
+    <Folder Include="obj" />
+    <Folder Include="obj\Debug" />
+    <Folder Include="Partitions" />
+    <Folder Include="Scripts" />
+    <Folder Include="StoredProcedures" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitkeep" />
     <None Include="README.md" />
     <None Include="DeployQueryVault.ps1" />
+    <None Include="Tables\Core\.gitkeep" />
+    <None Include="Tables\PartitionMaintenance\.gitkeep" />
+    <None Include="Tables\QueryStore\.gitkeep" />
+    <None Include="Jobs\.gitkeep" />
+    <None Include="obj\Debug\Model.xml" />
+    <None Include="obj\Debug\QueryVault.dll" />
+    <None Include="obj\Debug\QueryVault.pdb" />
+    <None Include="obj\Debug\QueryVault.sqlproj.AssemblyReference.cache" />
+    <None Include="obj\Debug\QueryVault.sqlproj.FileListAbsolute.txt" />
+    <None Include="Partitions\.gitkeep" />
+    <None Include="Scripts\.gitkeep" />
+    <None Include="Scripts\DeployQueryVault.ps1" />
+    <None Include="StoredProcedures\.gitkeep" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="PartitionFunction.sql" />
@@ -87,5 +113,29 @@
     <Build Include="CreateArchiveJob_AllDatabases.sql" />
     <Build Include="Deploy.sql" />
     <Build Include="Deploy_Standalone.sql" />
+    <Build Include="Tables\Core\DatabaseConfig.sql" />
+    <Build Include="Tables\Core\RunMetadata.sql" />
+    <Build Include="Tables\PartitionMaintenance\query_store_plan_PartitionMaintenance.sql" />
+    <Build Include="Tables\PartitionMaintenance\query_store_query_PartitionMaintenance.sql" />
+    <Build Include="Tables\PartitionMaintenance\query_store_query_text_PartitionMaintenance.sql" />
+    <Build Include="Tables\PartitionMaintenance\query_store_runtime_stats_interval_PartitionMaintenance.sql" />
+    <Build Include="Tables\PartitionMaintenance\query_store_runtime_stats_PartitionMaintenance.sql" />
+    <Build Include="Tables\PartitionMaintenance\query_store_wait_stats_PartitionMaintenance.sql" />
+    <Build Include="Tables\QueryStore\query_store_plan.sql" />
+    <Build Include="Tables\QueryStore\query_store_query.sql" />
+    <Build Include="Tables\QueryStore\query_store_query_text.sql" />
+    <Build Include="Tables\QueryStore\query_store_runtime_stats.sql" />
+    <Build Include="Tables\QueryStore\query_store_runtime_stats_interval.sql" />
+    <Build Include="Tables\QueryStore\query_store_wait_stats.sql" />
+    <Build Include="Jobs\CreateArchiveJob_AllDatabases.sql" />
+    <Build Include="Jobs\CreateArchiveJob_Template.sql" />
+    <Build Include="Partitions\PartitionFunction.sql" />
+    <Build Include="Partitions\PartitionScheme.sql" />
+    <Build Include="Scripts\Deploy.sql" />
+    <Build Include="Scripts\Deploy_Standalone.sql" />
+    <Build Include="StoredProcedures\usp_ArchiveQueryStore.sql" />
+    <Build Include="StoredProcedures\usp_GetArchiveSummary.sql" />
+    <Build Include="StoredProcedures\usp_InitializeDatabase.sql" />
+    <Build Include="StoredProcedures\usp_ManagePartitions.sql" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <PropertyGroup>
+	<Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+	<Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+	<Name>QueryVault</Name>
+	<SchemaVersion>2.0</SchemaVersion>
+	<ProjectVersion>4.1</ProjectVersion>
+	<ProjectGuid>{4f4f13ab-3526-4e3f-9fa4-076a38247f25}</ProjectGuid>
+	<DSP>Microsoft.Data.Tools.Schema.Sql.Sql150DatabaseSchemaProvider</DSP>
+	<OutputType>Database</OutputType>
+	<RootPath>
+	</RootPath>
+	<RootNamespace>QueryVault</RootNamespace>
+	<AssemblyName>QueryVault</AssemblyName>
+	<ModelCollation>1033, CI</ModelCollation>
+	<DefaultFileStructure>BySchemaAndSchemaType</DefaultFileStructure>
+	<DeployToDatabase>True</DeployToDatabase>
+	<TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+	<TargetLanguage>CS</TargetLanguage>
+	<AppDesignerFolder>Properties</AppDesignerFolder>
+	<SqlServerVerification>False</SqlServerVerification>
+	<IncludeCompositeObjects>True</IncludeCompositeObjects>
+	<TargetDatabaseSet>True</TargetDatabaseSet>
+	<CompatibilityMode>150</CompatibilityMode>
+	<AllowSnapshotIsolation>True</AllowSnapshotIsolation>
+	<ReadCommittedSnapshot>True</ReadCommittedSnapshot>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+	<OutputPath>bin\Release\</OutputPath>
+	<BuildScriptName>$(MSBuildProjectName).sql</BuildScriptName>
+	<TreatWarningsAsErrors>False</TreatWarningsAsErrors>
+	<DebugType>pdbonly</DebugType>
+	<Optimize>true</Optimize>
+	<DefineDebug>false</DefineDebug>
+	<DefineTrace>true</DefineTrace>
+	<ErrorReport>prompt</ErrorReport>
+	<WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+	<OutputPath>bin\Debug\</OutputPath>
+	<BuildScriptName>$(MSBuildProjectName).sql</BuildScriptName>
+	<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+	<DebugSymbols>true</DebugSymbols>
+	<DebugType>full</DebugType>
+	<Optimize>false</Optimize>
+	<DefineDebug>true</DefineDebug>
+	<DefineTrace>true</DefineTrace>
+	<ErrorReport>prompt</ErrorReport>
+	<WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+	<VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">11.0</VisualStudioVersion>
+	<!-- Default to the v11.0 targets path if the targets file for the current VS version is not found -->
+	<SSDTExists Condition="Exists('$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\SSDT\Microsoft.Data.Tools.Schema.SqlTasks.targets')">True</SSDTExists>
+	<VisualStudioVersion Condition="'$(SSDTExists)' == ''">11.0</VisualStudioVersion>
+  </PropertyGroup>
+  <Import Condition="'$(SQLDBExtensionsRefPath)' != ''" Project="$(SQLDBExtensionsRefPath)\Microsoft.Data.Tools.Schema.SqlTasks.targets" />
+  <Import Condition="'$(SQLDBExtensionsRefPath)' == ''" Project="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\SSDT\Microsoft.Data.Tools.Schema.SqlTasks.targets" />
+  <ItemGroup>
+	<Folder Include="Properties" />
+	<Folder Include="Tables" />
+	<Folder Include="Tables\Core" />
+	<Folder Include="Tables\PartitionMaintenance" />
+	<Folder Include="Tables\QueryStore" />
+	<Folder Include="Jobs" />
+	<Folder Include="Partitions" />
+	<Folder Include="Scripts" />
+	<Folder Include="StoredProcedures" />
+  </ItemGroup>
+  <ItemGroup>
+	<!-- Documentation and Helper Files -->
+	<None Include="README.md" />
+	<None Include="Tables\Core\.gitkeep" />
+	<None Include="Tables\PartitionMaintenance\.gitkeep" />
+	<None Include="Tables\QueryStore\.gitkeep" />
+	<None Include="Jobs\.gitkeep" />
+	<None Include="Partitions\.gitkeep" />
+	<None Include="Scripts\.gitkeep" />
+	<None Include="Scripts\DeployQueryVault.ps1" />
+	<None Include="Scripts\FixProject.ps1" />
+	<None Include="StoredProcedures\.gitkeep" />
+
+	<!-- Deployment Scripts (Not built, run manually) -->
+	<None Include="Scripts\Deploy.sql" />
+	<None Include="Scripts\Deploy_Standalone.sql" />
+
+	<!-- SQL Agent Job Templates (Not built, run manually after deployment) -->
+	<None Include="Jobs\CreateArchiveJob_AllDatabases.sql" />
+	<None Include="Jobs\CreateArchiveJob_Template.sql" />
+  </ItemGroup>
+  <ItemGroup>
+	<!-- Partition Infrastructure -->
+	<Build Include="Partitions\PartitionFunction.sql" />
+	<Build Include="Partitions\PartitionScheme.sql" />
+
+	<!-- Core Metadata Tables -->
+	<Build Include="Tables\Core\DatabaseConfig.sql" />
+	<Build Include="Tables\Core\RunMetadata.sql" />
+
+	<!-- QueryStore Archive Tables -->
+	<Build Include="Tables\QueryStore\query_store_plan.sql" />
+	<Build Include="Tables\QueryStore\query_store_query.sql" />
+	<Build Include="Tables\QueryStore\query_store_query_text.sql" />
+	<Build Include="Tables\QueryStore\query_store_runtime_stats.sql" />
+	<Build Include="Tables\QueryStore\query_store_runtime_stats_interval.sql" />
+	<Build Include="Tables\QueryStore\query_store_wait_stats.sql" />
+
+	<!-- Partition Maintenance Tables -->
+	<Build Include="Tables\PartitionMaintenance\query_store_plan_PartitionMaintenance.sql" />
+	<Build Include="Tables\PartitionMaintenance\query_store_query_PartitionMaintenance.sql" />
+	<Build Include="Tables\PartitionMaintenance\query_store_query_text_PartitionMaintenance.sql" />
+	<Build Include="Tables\PartitionMaintenance\query_store_runtime_stats_interval_PartitionMaintenance.sql" />
+	<Build Include="Tables\PartitionMaintenance\query_store_runtime_stats_PartitionMaintenance.sql" />
+	<Build Include="Tables\PartitionMaintenance\query_store_wait_stats_PartitionMaintenance.sql" />
+
+	<!-- Stored Procedures -->
+	<Build Include="StoredProcedures\usp_ArchiveQueryStore.sql" />
+	<Build Include="StoredProcedures\usp_GetArchiveSummary.sql" />
+	<Build Include="StoredProcedures\usp_InitializeDatabase.sql" />
+	<Build Include="StoredProcedures\usp_ManagePartitions.sql" />
+  </ItemGroup>
+</Project>

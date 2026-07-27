@@ -87,6 +87,11 @@
     <None Include="Scripts\.gitkeep" />
     <None Include="Scripts\DeployQueryVault.ps1" />
     <None Include="StoredProcedures\.gitkeep" />
+    <None Include="FixProject.ps1" />
+    <None Include="QueryVault_Fixed.sqlproj" />
+    <None Include="FIX_BUILD_ERRORS.md" />
+    <None Include="ApplyProjectFix.ps1" />
+    <None Include="SETUP_SUMMARY.md" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="PartitionFunction.sql" />
@@ -137,5 +142,9 @@
     <Build Include="StoredProcedures\usp_GetArchiveSummary.sql" />
     <Build Include="StoredProcedures\usp_InitializeDatabase.sql" />
     <Build Include="StoredProcedures\usp_ManagePartitions.sql" />
+    <Build Include="EnableQueryStore.sql" />
+    <Build Include="FixSQL2019Compatibility.sql" />
+    <Build Include="CompleteSQL2019Fix.sql" />
+    <Build Include="ups_ArchiveQueryStore.sql" />
   </ItemGroup>
 </Project>

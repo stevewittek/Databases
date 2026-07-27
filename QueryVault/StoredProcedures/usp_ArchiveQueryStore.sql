@@ -196,16 +196,14 @@ BEGIN
 		 query_plan, is_online_index_plan, is_trivial_plan, is_parallel_plan, is_forced_plan,
 		 is_natively_compiled, force_failure_count, last_force_failure_reason, last_force_failure_reason_desc,
 		 count_compiles, initial_compile_start_time, last_compile_start_time, last_execution_time,
-		 avg_compile_duration, last_compile_duration, plan_forcing_type, plan_forcing_type_desc,
-		 has_compile_replay_script, is_optimized_plan_forcing_disabled, plan_type, plan_type_desc)
+		 avg_compile_duration, last_compile_duration, plan_forcing_type, plan_forcing_type_desc)
 		SELECT 
 			@RunID,
 			p.plan_id, p.query_id, p.plan_group_id, p.engine_version, p.compatibility_level, p.query_plan_hash,
 			p.query_plan, p.is_online_index_plan, p.is_trivial_plan, p.is_parallel_plan, p.is_forced_plan,
 			p.is_natively_compiled, p.force_failure_count, p.last_force_failure_reason, p.last_force_failure_reason_desc,
 			p.count_compiles, p.initial_compile_start_time, p.last_compile_start_time, p.last_execution_time,
-			p.avg_compile_duration, p.last_compile_duration, p.plan_forcing_type, p.plan_forcing_type_desc,
-			p.has_compile_replay_script, p.is_optimized_plan_forcing_disabled, p.plan_type, p.plan_type_desc
+			p.avg_compile_duration, p.last_compile_duration, p.plan_forcing_type, p.plan_forcing_type_desc
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_plan p
 		WHERE EXISTS (
 			SELECT 1 
@@ -243,8 +241,7 @@ BEGIN
 		 avg_rowcount, last_rowcount, min_rowcount, max_rowcount, stdev_rowcount,
 		 avg_num_physical_io_reads, last_num_physical_io_reads, min_num_physical_io_reads, max_num_physical_io_reads, stdev_num_physical_io_reads,
 		 avg_log_bytes_used, last_log_bytes_used, min_log_bytes_used, max_log_bytes_used, stdev_log_bytes_used,
-		 avg_tempdb_space_used, last_tempdb_space_used, min_tempdb_space_used, max_tempdb_space_used, stdev_tempdb_space_used,
-		 avg_page_server_io_reads, last_page_server_io_reads, min_page_server_io_reads, max_page_server_io_reads, stdev_page_server_io_reads)
+		 avg_tempdb_space_used, last_tempdb_space_used, min_tempdb_space_used, max_tempdb_space_used, stdev_tempdb_space_used)
 		SELECT 
 			@RunID,
 			rs.runtime_stats_id, rs.plan_id, rs.runtime_stats_interval_id, rs.execution_type, rs.execution_type_desc,
@@ -260,8 +257,7 @@ BEGIN
 			rs.avg_rowcount, rs.last_rowcount, rs.min_rowcount, rs.max_rowcount, rs.stdev_rowcount,
 			rs.avg_num_physical_io_reads, rs.last_num_physical_io_reads, rs.min_num_physical_io_reads, rs.max_num_physical_io_reads, rs.stdev_num_physical_io_reads,
 			rs.avg_log_bytes_used, rs.last_log_bytes_used, rs.min_log_bytes_used, rs.max_log_bytes_used, rs.stdev_log_bytes_used,
-			rs.avg_tempdb_space_used, rs.last_tempdb_space_used, rs.min_tempdb_space_used, rs.max_tempdb_space_used, rs.stdev_tempdb_space_used,
-			rs.avg_page_server_io_reads, rs.last_page_server_io_reads, rs.min_page_server_io_reads, rs.max_page_server_io_reads, rs.stdev_page_server_io_reads
+			rs.avg_tempdb_space_used, rs.last_tempdb_space_used, rs.min_tempdb_space_used, rs.max_tempdb_space_used, rs.stdev_tempdb_space_used
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats rs
 		INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval i
 			ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id

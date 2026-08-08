@@ -92,6 +92,8 @@
     <None Include="FIX_BUILD_ERRORS.md" />
     <None Include="ApplyProjectFix.ps1" />
     <None Include="SETUP_SUMMARY.md" />
+    <None Include="FixBuildErrors.ps1" />
+    <None Include="HOW_TO_FIX_BUILD_ERRORS.md" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="PartitionFunction.sql" />

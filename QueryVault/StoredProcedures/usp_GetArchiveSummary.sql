@@ -3,6 +3,10 @@
 	Returns summary information about archived runs
 */
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.usp_GetArchiveSummary
 	@SourceDatabaseName NVARCHAR(128) = NULL,
 	@RunID INT = NULL,

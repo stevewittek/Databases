@@ -11,8 +11,7 @@ CREATE TABLE dbo.query_store_runtime_stats_interval_PartitionMaintenance
 	end_time DATETIMEOFFSET(7) NOT NULL,
 	comment NVARCHAR(32) NULL,
 
-	CONSTRAINT PK_query_store_runtime_stats_interval_PartitionMaintenance PRIMARY KEY NONCLUSTERED (RunID, runtime_stats_interval_id),
-	CONSTRAINT CK_query_store_runtime_stats_interval_PartitionMaintenance CHECK (RunID = RunID)
+	CONSTRAINT PK_query_store_runtime_stats_interval_PartitionMaintenance PRIMARY KEY NONCLUSTERED (RunID, runtime_stats_interval_id)
 ) ON PS_RunID(RunID);
 GO
 

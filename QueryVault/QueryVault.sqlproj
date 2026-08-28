@@ -144,6 +144,7 @@
     <Build Include="StoredProcedures\usp_GetArchiveSummary.sql" />
     <Build Include="StoredProcedures\usp_InitializeDatabase.sql" />
     <Build Include="StoredProcedures\usp_ManagePartitions.sql" />
+    <Build Include="StoredProcedures\usp_PurgeExpiredArchives.sql" />
     <Build Include="EnableQueryStore.sql" />
     <Build Include="FixSQL2019Compatibility.sql" />
     <Build Include="CompleteSQL2019Fix.sql" />

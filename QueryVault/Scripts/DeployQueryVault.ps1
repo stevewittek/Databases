@@ -74,7 +74,8 @@ $deploymentSteps = @(
 	@{ Name = "usp_ManagePartitions Procedure"; Path = "StoredProcedures\usp_ManagePartitions.sql" },
 	@{ Name = "usp_InitializeDatabase Procedure"; Path = "StoredProcedures\usp_InitializeDatabase.sql" },
 	@{ Name = "usp_GetArchiveSummary Procedure"; Path = "StoredProcedures\usp_GetArchiveSummary.sql" },
-	@{ Name = "usp_ArchiveQueryStore Procedure"; Path = "StoredProcedures\usp_ArchiveQueryStore.sql" }
+	@{ Name = "usp_ArchiveQueryStore Procedure"; Path = "StoredProcedures\usp_ArchiveQueryStore.sql" },
+	@{ Name = "usp_PurgeExpiredArchives Procedure"; Path = "StoredProcedures\usp_PurgeExpiredArchives.sql" }
 )
 
 function Write-Header {

@@ -12,8 +12,7 @@ CREATE TABLE dbo.query_store_query_text_PartitionMaintenance
 	is_part_of_encrypted_module BIT NOT NULL,
 	has_restricted_text BIT NOT NULL,
 
-	CONSTRAINT PK_query_store_query_text_PartitionMaintenance PRIMARY KEY NONCLUSTERED (RunID, query_text_id),
-	CONSTRAINT CK_query_store_query_text_PartitionMaintenance CHECK (RunID = RunID)
+	CONSTRAINT PK_query_store_query_text_PartitionMaintenance PRIMARY KEY NONCLUSTERED (RunID, query_text_id)
 ) ON PS_RunID(RunID);
 GO
 

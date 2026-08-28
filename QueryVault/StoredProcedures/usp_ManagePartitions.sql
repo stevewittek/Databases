@@ -3,6 +3,10 @@
 	Manages partition operations including add, split, switch, and cleanup
 */
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.usp_ManagePartitions
 	@Operation NVARCHAR(50), -- 'AddPartition', 'SwitchOut', 'Truncate', 'GetInfo'
 	@RunID INT = NULL,

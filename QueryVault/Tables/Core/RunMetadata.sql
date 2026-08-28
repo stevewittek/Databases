@@ -3,6 +3,10 @@
 	Tracks each QueryStore archive run with metadata and protection flags
 */
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 CREATE TABLE dbo.RunMetadata
 (
 	RunID INT IDENTITY(1,1) NOT NULL,

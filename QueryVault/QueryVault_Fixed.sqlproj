@@ -84,6 +84,11 @@
 	<!-- Deployment Scripts (Not built, run manually) -->
 	<None Include="Scripts\Deploy.sql" />
 	<None Include="Scripts\Deploy_Standalone.sql" />
+	<None Include="Scripts\FixPartitionMaintenanceSwitchConstraints.sql" />
+	<None Include="Scripts\Voyager2_CreateDisabledArchiveJob.sql" />
+	<None Include="Scripts\Voyager2_SmokeWorkload_StackOverflow.sql" />
+	<None Include="Scripts\Voyager2_SmokeWorkload_WideWorldImporters.sql" />
+	<None Include="Tests\TestPurgeExpiredArchives.sql" />
 
 	<!-- SQL Agent Job Templates (Not built, run manually after deployment) -->
 	<None Include="Jobs\CreateArchiveJob_AllDatabases.sql" />
@@ -119,5 +124,6 @@
 	<Build Include="StoredProcedures\usp_GetArchiveSummary.sql" />
 	<Build Include="StoredProcedures\usp_InitializeDatabase.sql" />
 	<Build Include="StoredProcedures\usp_ManagePartitions.sql" />
+	<Build Include="StoredProcedures\usp_PurgeExpiredArchives.sql" />
   </ItemGroup>
 </Project>

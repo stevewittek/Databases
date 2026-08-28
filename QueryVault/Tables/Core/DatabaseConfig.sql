@@ -3,6 +3,10 @@
 	Stores configuration for each database with QueryStore enabled
 */
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 CREATE TABLE dbo.DatabaseConfig
 (
 	ConfigID INT IDENTITY(1,1) NOT NULL,

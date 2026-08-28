@@ -169,6 +169,9 @@ GO
 :r "$(ProjectDir)StoredProcedures\usp_ArchiveQueryStore.sql"
 GO
 
+:r "$(ProjectDir)StoredProcedures\usp_PurgeExpiredArchives.sql"
+GO
+
 -- ========================================
 -- STEP 8: Deployment Summary
 -- ========================================

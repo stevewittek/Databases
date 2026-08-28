@@ -3,6 +3,10 @@
 	Registers a new database for QueryStore archiving
 */
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.usp_InitializeDatabase
 	@DatabaseName NVARCHAR(128),
 	@ServerName NVARCHAR(128) = NULL,

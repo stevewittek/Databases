@@ -3,6 +3,10 @@
 	Archives QueryStore data from source database to QueryVaultDB
 */
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.usp_ArchiveQueryStore
 	@SourceDatabaseName NVARCHAR(128),
 	@RunName NVARCHAR(255),
@@ -20,13 +24,15 @@ BEGIN
 	DECLARE @SQL NVARCHAR(MAX);
 	DECLARE @ActualStartDateTime DATETIME2(7);
 	DECLARE @ActualEndDateTime DATETIME2(7);
+	DECLARE @RequestedEndDateTime DATETIME2(7);
+	DECLARE @SafeQueryStoreCutoff DATETIME2(7);
+	DECLARE @QueryStoreFlushSeconds INT = 900;
 	DECLARE @ActualBatchSize INT;
+	DECLARE @ActualRetentionDays INT;
 	DECLARE @RowCount BIGINT;
 	DECLARE @CompressionDelay INT;
 
 	BEGIN TRY
-		BEGIN TRANSACTION;
-
 		-- Get configuration for the database
 		DECLARE @ConfigID INT;
 		DECLARE @DefaultDaysToArchive INT;
@@ -35,9 +41,11 @@ BEGIN
 			@ConfigID = ConfigID,
 			@DefaultDaysToArchive = DefaultDaysToArchive,
 			@ActualBatchSize = ISNULL(@BatchSize, MaxRowsPerBatch),
-			@CompressionDelay = CompressionDelayMinutes
+			@CompressionDelay = CompressionDelayMinutes,
+			@ActualRetentionDays = ISNULL(@RetentionDays, DefaultRetentionDays)
 		FROM dbo.DatabaseConfig
 		WHERE DatabaseName = @SourceDatabaseName
+		  AND ServerName = @@SERVERNAME
 		  AND IsEnabled = 1;
 
 		IF @ConfigID IS NULL
@@ -46,9 +54,30 @@ BEGIN
 			RETURN -1;
 		END
 
-		-- Set date range (use provided or default to last N days)
-		SET @ActualEndDateTime = ISNULL(@EndDateTime, SYSUTCDATETIME());
-		SET @ActualStartDateTime = ISNULL(@StartDateTime, DATEADD(DAY, -@DefaultDaysToArchive, @ActualEndDateTime));
+		-- Allow one Query Store flush interval before archiving. The most recent
+		-- interval can expose separate persisted and in-memory rows with the same
+		-- runtime_stats_id and wait_stats_id.
+		SET @SQL = N'SELECT @FlushSeconds = flush_interval_seconds
+			FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.database_query_store_options;';
+
+		EXEC sp_executesql @SQL,
+			N'@FlushSeconds INT OUTPUT',
+			@FlushSeconds = @QueryStoreFlushSeconds OUTPUT;
+
+		SET @QueryStoreFlushSeconds = ISNULL(@QueryStoreFlushSeconds, 900);
+		SET @RequestedEndDateTime = ISNULL(@EndDateTime, SYSUTCDATETIME());
+		SET @SafeQueryStoreCutoff = DATEADD(SECOND, -@QueryStoreFlushSeconds, SYSUTCDATETIME());
+		SET @ActualEndDateTime = CASE
+			WHEN @RequestedEndDateTime < @SafeQueryStoreCutoff THEN @RequestedEndDateTime
+			ELSE @SafeQueryStoreCutoff
+		END;
+		SET @ActualStartDateTime = ISNULL(
+			@StartDateTime,
+			DATEADD(DAY, -@DefaultDaysToArchive, @ActualEndDateTime)
+		);
+
+		IF @ActualEndDateTime < @ActualStartDateTime
+			THROW 51003, 'The requested archive range does not contain a safely flushed Query Store interval.', 1;
 
 		PRINT 'Archiving QueryStore data from ' + @SourceDatabaseName;
 		PRINT 'Date Range: ' + CONVERT(VARCHAR(30), @ActualStartDateTime, 121) + ' to ' + CONVERT(VARCHAR(30), @ActualEndDateTime, 121);
@@ -71,7 +100,7 @@ BEGIN
 			@ActualStartDateTime,
 			@ActualEndDateTime,
 			@DoNotDelete,
-			CASE WHEN @RetentionDays IS NOT NULL THEN DATEADD(DAY, @RetentionDays, SYSUTCDATETIME()) ELSE NULL END,
+			CASE WHEN @DoNotDelete = 0 THEN DATEADD(DAY, @ActualRetentionDays, SYSUTCDATETIME()) ELSE NULL END,
 			'In Progress'
 		);
 
@@ -93,6 +122,9 @@ BEGIN
 				@NewPartitionCount = 10;
 		END
 
+		-- Keep the run metadata outside the archive transaction so failures remain visible.
+		BEGIN TRANSACTION;
+
 		-- Archive query_store_runtime_stats_interval
 		PRINT 'Archiving query_store_runtime_stats_interval...';
 		SET @SQL = N'
@@ -105,14 +137,18 @@ BEGIN
 			end_time,
 			comment
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval
-		WHERE start_time >= @StartDateTime
-		  AND end_time <= @EndDateTime;';
+		-- Archive completed intervals only. The active Query Store interval can
+		-- expose both persisted and in-memory rows with the same statistics ID.
+		WHERE end_time > @StartDateTime
+		  AND end_time <= @EndDateTime;
+		SET @RowsArchived = @@ROWCOUNT;';
 
 		EXEC sp_executesql @SQL, 
-			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7)',
-			@RunID, @ActualStartDateTime, @ActualEndDateTime;
-
-		SET @RowCount = @@ROWCOUNT;
+			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7), @RowsArchived BIGINT OUTPUT',
+			@RunID = @RunID,
+			@StartDateTime = @ActualStartDateTime,
+			@EndDateTime = @ActualEndDateTime,
+			@RowsArchived = @RowCount OUTPUT;
 		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
 
 		UPDATE dbo.RunMetadata 
@@ -133,18 +169,26 @@ BEGIN
 			qt.has_restricted_text
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_query_text qt
 		WHERE EXISTS (
-			SELECT 1 
+			SELECT 1
 			FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_query q
+			INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_plan p
+				ON p.query_id = q.query_id
+			INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats rs
+				ON rs.plan_id = p.plan_id
+			INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval i
+				ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id
 			WHERE q.query_text_id = qt.query_text_id
-			  AND q.last_execution_time >= @StartDateTime
-			  AND q.last_execution_time <= @EndDateTime
-		);';
+			  AND i.end_time > @StartDateTime
+			  AND i.end_time <= @EndDateTime
+		);
+		SET @RowsArchived = @@ROWCOUNT;';
 
 		EXEC sp_executesql @SQL,
-			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7)',
-			@RunID, @ActualStartDateTime, @ActualEndDateTime;
-
-		SET @RowCount = @@ROWCOUNT;
+			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7), @RowsArchived BIGINT OUTPUT',
+			@RunID = @RunID,
+			@StartDateTime = @ActualStartDateTime,
+			@EndDateTime = @ActualEndDateTime,
+			@RowsArchived = @RowCount OUTPUT;
 		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
 
 		UPDATE dbo.RunMetadata 
@@ -173,15 +217,26 @@ BEGIN
 			avg_bind_cpu_time, last_bind_cpu_time, avg_optimize_duration, last_optimize_duration,
 			avg_optimize_cpu_time, last_optimize_cpu_time, avg_compile_memory_kb, last_compile_memory_kb,
 			max_compile_memory_kb, is_clouddb_internal_query
-		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_query
-		WHERE last_execution_time >= @StartDateTime
-		  AND last_execution_time <= @EndDateTime;';
+		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_query q
+		WHERE EXISTS (
+			SELECT 1
+			FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_plan p
+			INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats rs
+				ON rs.plan_id = p.plan_id
+			INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval i
+				ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id
+			WHERE p.query_id = q.query_id
+			  AND i.end_time > @StartDateTime
+			  AND i.end_time <= @EndDateTime
+		);
+		SET @RowsArchived = @@ROWCOUNT;';
 
 		EXEC sp_executesql @SQL,
-			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7)',
-			@RunID, @ActualStartDateTime, @ActualEndDateTime;
-
-		SET @RowCount = @@ROWCOUNT;
+			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7), @RowsArchived BIGINT OUTPUT',
+			@RunID = @RunID,
+			@StartDateTime = @ActualStartDateTime,
+			@EndDateTime = @ActualEndDateTime,
+			@RowsArchived = @RowCount OUTPUT;
 		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
 
 		UPDATE dbo.RunMetadata 
@@ -196,28 +251,34 @@ BEGIN
 		 query_plan, is_online_index_plan, is_trivial_plan, is_parallel_plan, is_forced_plan,
 		 is_natively_compiled, force_failure_count, last_force_failure_reason, last_force_failure_reason_desc,
 		 count_compiles, initial_compile_start_time, last_compile_start_time, last_execution_time,
-		 avg_compile_duration, last_compile_duration, plan_forcing_type, plan_forcing_type_desc)
+			 avg_compile_duration, last_compile_duration, plan_forcing_type, plan_forcing_type_desc,
+			 has_compile_replay_script, is_optimized_plan_forcing_disabled, plan_type, plan_type_desc)
 		SELECT 
 			@RunID,
 			p.plan_id, p.query_id, p.plan_group_id, p.engine_version, p.compatibility_level, p.query_plan_hash,
 			p.query_plan, p.is_online_index_plan, p.is_trivial_plan, p.is_parallel_plan, p.is_forced_plan,
 			p.is_natively_compiled, p.force_failure_count, p.last_force_failure_reason, p.last_force_failure_reason_desc,
 			p.count_compiles, p.initial_compile_start_time, p.last_compile_start_time, p.last_execution_time,
-			p.avg_compile_duration, p.last_compile_duration, p.plan_forcing_type, p.plan_forcing_type_desc
+			p.avg_compile_duration, p.last_compile_duration, p.plan_forcing_type, p.plan_forcing_type_desc,
+			p.has_compile_replay_script, p.is_optimized_plan_forcing_disabled, p.plan_type, p.plan_type_desc
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_plan p
 		WHERE EXISTS (
-			SELECT 1 
-			FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_query q
-			WHERE q.query_id = p.query_id
-			  AND q.last_execution_time >= @StartDateTime
-			  AND q.last_execution_time <= @EndDateTime
-		);';
+			SELECT 1
+			FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats rs
+			INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval i
+				ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id
+			WHERE rs.plan_id = p.plan_id
+			  AND i.end_time > @StartDateTime
+			  AND i.end_time <= @EndDateTime
+		);
+		SET @RowsArchived = @@ROWCOUNT;';
 
 		EXEC sp_executesql @SQL,
-			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7)',
-			@RunID, @ActualStartDateTime, @ActualEndDateTime;
-
-		SET @RowCount = @@ROWCOUNT;
+			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7), @RowsArchived BIGINT OUTPUT',
+			@RunID = @RunID,
+			@StartDateTime = @ActualStartDateTime,
+			@EndDateTime = @ActualEndDateTime,
+			@RowsArchived = @RowCount OUTPUT;
 		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
 
 		UPDATE dbo.RunMetadata 
@@ -239,9 +300,11 @@ BEGIN
 		 avg_dop, last_dop, min_dop, max_dop, stdev_dop,
 		 avg_query_max_used_memory, last_query_max_used_memory, min_query_max_used_memory, max_query_max_used_memory, stdev_query_max_used_memory,
 		 avg_rowcount, last_rowcount, min_rowcount, max_rowcount, stdev_rowcount,
-		 avg_num_physical_io_reads, last_num_physical_io_reads, min_num_physical_io_reads, max_num_physical_io_reads, stdev_num_physical_io_reads,
-		 avg_log_bytes_used, last_log_bytes_used, min_log_bytes_used, max_log_bytes_used, stdev_log_bytes_used,
-		 avg_tempdb_space_used, last_tempdb_space_used, min_tempdb_space_used, max_tempdb_space_used, stdev_tempdb_space_used)
+			 avg_num_physical_io_reads, last_num_physical_io_reads, min_num_physical_io_reads, max_num_physical_io_reads, stdev_num_physical_io_reads,
+			 avg_log_bytes_used, last_log_bytes_used, min_log_bytes_used, max_log_bytes_used, stdev_log_bytes_used,
+			 avg_tempdb_space_used, last_tempdb_space_used, min_tempdb_space_used, max_tempdb_space_used, stdev_tempdb_space_used,
+			 avg_page_server_io_reads, last_page_server_io_reads, min_page_server_io_reads, max_page_server_io_reads, stdev_page_server_io_reads,
+			 replica_group_id)
 		SELECT 
 			@RunID,
 			rs.runtime_stats_id, rs.plan_id, rs.runtime_stats_interval_id, rs.execution_type, rs.execution_type_desc,
@@ -257,18 +320,22 @@ BEGIN
 			rs.avg_rowcount, rs.last_rowcount, rs.min_rowcount, rs.max_rowcount, rs.stdev_rowcount,
 			rs.avg_num_physical_io_reads, rs.last_num_physical_io_reads, rs.min_num_physical_io_reads, rs.max_num_physical_io_reads, rs.stdev_num_physical_io_reads,
 			rs.avg_log_bytes_used, rs.last_log_bytes_used, rs.min_log_bytes_used, rs.max_log_bytes_used, rs.stdev_log_bytes_used,
-			rs.avg_tempdb_space_used, rs.last_tempdb_space_used, rs.min_tempdb_space_used, rs.max_tempdb_space_used, rs.stdev_tempdb_space_used
+			rs.avg_tempdb_space_used, rs.last_tempdb_space_used, rs.min_tempdb_space_used, rs.max_tempdb_space_used, rs.stdev_tempdb_space_used,
+			rs.avg_page_server_io_reads, rs.last_page_server_io_reads, rs.min_page_server_io_reads, rs.max_page_server_io_reads, rs.stdev_page_server_io_reads,
+			rs.replica_group_id
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats rs
 		INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval i
 			ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id
-		WHERE i.start_time >= @StartDateTime
-		  AND i.end_time <= @EndDateTime;';
+		WHERE i.end_time > @StartDateTime
+		  AND i.end_time <= @EndDateTime;
+		SET @RowsArchived = @@ROWCOUNT;';
 
 		EXEC sp_executesql @SQL,
-			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7)',
-			@RunID, @ActualStartDateTime, @ActualEndDateTime;
-
-		SET @RowCount = @@ROWCOUNT;
+			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7), @RowsArchived BIGINT OUTPUT',
+			@RunID = @RunID,
+			@StartDateTime = @ActualStartDateTime,
+			@EndDateTime = @ActualEndDateTime,
+			@RowsArchived = @RowCount OUTPUT;
 		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
 
 		UPDATE dbo.RunMetadata 
@@ -281,23 +348,27 @@ BEGIN
 		INSERT INTO dbo.query_store_wait_stats
 		(RunID, wait_stats_id, plan_id, runtime_stats_interval_id, wait_category, wait_category_desc,
 		 execution_type, execution_type_desc, total_query_wait_time_ms, avg_query_wait_time_ms,
-		 last_query_wait_time_ms, min_query_wait_time_ms, max_query_wait_time_ms, stdev_query_wait_time_ms)
+		 last_query_wait_time_ms, min_query_wait_time_ms, max_query_wait_time_ms, stdev_query_wait_time_ms,
+		 replica_group_id)
 		SELECT 
 			@RunID,
 			ws.wait_stats_id, ws.plan_id, ws.runtime_stats_interval_id, ws.wait_category, ws.wait_category_desc,
 			ws.execution_type, ws.execution_type_desc, ws.total_query_wait_time_ms, ws.avg_query_wait_time_ms,
-			ws.last_query_wait_time_ms, ws.min_query_wait_time_ms, ws.max_query_wait_time_ms, ws.stdev_query_wait_time_ms
+			ws.last_query_wait_time_ms, ws.min_query_wait_time_ms, ws.max_query_wait_time_ms, ws.stdev_query_wait_time_ms,
+			ws.replica_group_id
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_wait_stats ws
 		INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval i
 			ON i.runtime_stats_interval_id = ws.runtime_stats_interval_id
-		WHERE i.start_time >= @StartDateTime
-		  AND i.end_time <= @EndDateTime;';
+		WHERE i.end_time > @StartDateTime
+		  AND i.end_time <= @EndDateTime;
+		SET @RowsArchived = @@ROWCOUNT;';
 
 		EXEC sp_executesql @SQL,
-			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7)',
-			@RunID, @ActualStartDateTime, @ActualEndDateTime;
-
-		SET @RowCount = @@ROWCOUNT;
+			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7), @RowsArchived BIGINT OUTPUT',
+			@RunID = @RunID,
+			@StartDateTime = @ActualStartDateTime,
+			@EndDateTime = @ActualEndDateTime,
+			@RowsArchived = @RowCount OUTPUT;
 		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
 
 		UPDATE dbo.RunMetadata 

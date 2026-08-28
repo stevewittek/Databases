@@ -40,6 +40,7 @@ A comprehensive database solution for archiving SQL Server Query Store data with
    - `usp_InitializeDatabase`: Register databases for archiving
    - `usp_ArchiveQueryStore`: Main archiving procedure
    - `usp_ManagePartitions`: Partition management operations
+   - `usp_PurgeExpiredArchives`: Retention-aware purge of completed, unprotected runs
    - `usp_GetArchiveSummary`: Reporting and analysis
 
 ## Installation
@@ -169,41 +170,28 @@ EXEC QueryVaultDB.dbo.usp_ManagePartitions
 ### Delete Old Archives
 
 ```sql
--- Find archives eligible for deletion
-SELECT 
-	RunID,
-	RunName,
-	SourceDatabaseName,
-	StartDateTime,
-	EndDateTime,
-	DoNotDelete,
-	RetentionDate
-FROM QueryVaultDB.dbo.RunMetadata
-WHERE DoNotDelete = 0
-  AND RetentionDate < SYSUTCDATETIME()
-  AND RunStatus = 'Completed';
+-- Preview completed, expired, unprotected runs whose source configuration has
+-- AutoDeleteEnabled = 1.
+EXEC QueryVaultDB.dbo.usp_PurgeExpiredArchives @DryRun = 1;
 
--- Delete specific run (switch partition, then truncate)
-DECLARE @RunIDToDelete INT = 10;
-
-BEGIN TRANSACTION;
-
--- Switch partition to maintenance table
-EXEC QueryVaultDB.dbo.usp_ManagePartitions 
-	@Operation = 'SwitchOut',
-	@RunID = @RunIDToDelete;
-
--- Truncate maintenance partition
-EXEC QueryVaultDB.dbo.usp_ManagePartitions 
-	@Operation = 'Truncate',
-	@RunID = @RunIDToDelete;
-
--- Delete metadata
-DELETE FROM QueryVaultDB.dbo.RunMetadata 
-WHERE RunID = @RunIDToDelete;
-
-COMMIT TRANSACTION;
+-- Purge all eligible runs. Each run's partition switch, truncate, and metadata
+-- delete are atomic. Failures are reported after other eligible runs are tried.
+EXEC QueryVaultDB.dbo.usp_PurgeExpiredArchives;
 ```
+
+`DoNotDelete = 1` always protects a run. Failed and in-progress runs are also
+excluded from automated retention cleanup.
+
+Existing deployments created before automated purge support must run
+`Scripts\FixPartitionMaintenanceSwitchConstraints.sql` once. Fresh deployments
+do not create the legacy constraints.
+
+### Voyager 2 Scheduled Deployment
+
+`Scripts\Voyager2_CreateDisabledArchiveJob.sql` creates a dedicated
+`queryvault_agent` login, grants read-only Query Store access to enabled source
+databases, and configures a two-step daily SQL Agent job at 02:30 UTC. The
+historical filename is retained for compatibility; the resulting job is enabled.
 
 ## Configuration Options
 

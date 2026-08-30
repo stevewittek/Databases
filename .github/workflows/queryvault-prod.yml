@@ -1,0 +1,45 @@
+name: QueryVault Production Deployment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: queryvault-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy QueryVault to Voyager 2
+    if: ${{ github.ref == 'refs/heads/master' }}
+    runs-on: [self-hosted, Linux, X64, voyager2, queryvault-prod]
+    environment: queryvault-production
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run guarded QueryVault production deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -r /home/nasa/.config/queryvault-production/sql.env
+
+          set -a
+          . /home/nasa/.config/queryvault-production/sql.env
+          set +a
+
+          pwsh -NoLogo -NoProfile -NonInteractive \
+            -File ./QueryVault/Scripts/InvokeQueryVaultProductionDeployment.ps1 \
+            -ServerInstance "tcp:127.0.0.1,1433" \
+            -DatabaseName "QueryVaultDB" \
+            -BaselineRoot "/home/nasa/queryvault-production/baselines" \
+            -BackupRoot "/var/opt/mssql/userlog/backups/voyager2/QueryVaultDB/FULL" \
+            -GitSha "$GITHUB_SHA" \
+            -TrustServerCertificate

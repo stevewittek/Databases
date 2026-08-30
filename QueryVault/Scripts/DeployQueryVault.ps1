@@ -1,253 +1,174 @@
 <#
 .SYNOPSIS
-	Deploys the QueryVault database solution for SQL Server Query Store archiving.
+	Safely deploys QueryVault database objects from the canonical source folders.
 
 .DESCRIPTION
-	This script automates the deployment of the QueryVault database, including:
-	- Database creation
-	- Partition functions and schemes
-	- Core metadata tables
-	- QueryStore archive tables with columnstore indexes
-	- Partition maintenance tables
-	- Stored procedures
+	Designed for repeatable production automation. The script never installs
+	dependencies, never deploys SQL Agent job scripts, and requires the target
+	database to exist unless -AllowDatabaseCreate is explicitly supplied.
 
-.PARAMETER ServerInstance
-	The SQL Server instance to deploy to (e.g., "localhost" or "SERVER\INSTANCE")
-
-.PARAMETER DatabaseName
-	The name of the database to create (default: "QueryVaultDB")
-
-.PARAMETER ScriptPath
-	Path to the QueryVault scripts folder (default: current directory)
-
-.PARAMETER Credential
-	SQL Server credentials (optional, uses Windows Authentication if not provided)
-
-.EXAMPLE
-	.\DeployQueryVault.ps1 -ServerInstance "localhost"
-
-.EXAMPLE
-	.\DeployQueryVault.ps1 -ServerInstance "PRODSERVER\INSTANCE" -Credential (Get-Credential) -Verbose
-
-.NOTES
-	Author: QueryVault Team
-	Requires: SQL Server 2016 or higher
-	Requires: PowerShell 5.1 or higher
+	Existing tables are preserved and skipped. Partition scripts are idempotent,
+	and stored procedures use CREATE OR ALTER. Table shape changes require an
+	explicit reviewed migration; they are never inferred or applied destructively.
 #>
 
 [CmdletBinding()]
 param(
-	[Parameter(Mandatory=$true)]
+	[Parameter(Mandatory = $true)]
 	[string]$ServerInstance,
 
-	[Parameter(Mandatory=$false)]
+	[Parameter()]
 	[string]$DatabaseName = "QueryVaultDB",
 
-	[Parameter(Mandatory=$false)]
-	[string]$ScriptPath = $PSScriptRoot,
+	[Parameter()]
+	[string]$ScriptPath = (Split-Path -Parent $PSScriptRoot),
 
-	[Parameter(Mandatory=$false)]
-	[PSCredential]$Credential
+	[Parameter()]
+	[PSCredential]$Credential,
+
+	[Parameter()]
+	[string]$GitSha = $env:GITHUB_SHA,
+
+	[Parameter()]
+	[switch]$AllowDatabaseCreate,
+
+	[Parameter()]
+	[switch]$TrustServerCertificate
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-# Script execution order
+if ($DatabaseName -notmatch '^[A-Za-z_][A-Za-z0-9_@$#-]{0,127}$') {
+	throw "DatabaseName contains unsupported characters: $DatabaseName"
+}
+
+if (-not $Credential -and $env:QUERYVAULT_SQL_USER -and $env:QUERYVAULT_SQL_PASSWORD) {
+	$securePassword = ConvertTo-SecureString $env:QUERYVAULT_SQL_PASSWORD -AsPlainText -Force
+	$Credential = [PSCredential]::new($env:QUERYVAULT_SQL_USER, $securePassword)
+}
+
 $deploymentSteps = @(
-	@{ Name = "Partition Function"; Path = "Partitions\PartitionFunction.sql" },
-	@{ Name = "Partition Scheme"; Path = "Partitions\PartitionScheme.sql" },
-	@{ Name = "RunMetadata Table"; Path = "Tables\Core\RunMetadata.sql" },
-	@{ Name = "DatabaseConfig Table"; Path = "Tables\Core\DatabaseConfig.sql" },
-	@{ Name = "query_store_query Table"; Path = "Tables\QueryStore\query_store_query.sql" },
-	@{ Name = "query_store_query_text Table"; Path = "Tables\QueryStore\query_store_query_text.sql" },
-	@{ Name = "query_store_plan Table"; Path = "Tables\QueryStore\query_store_plan.sql" },
-	@{ Name = "query_store_runtime_stats Table"; Path = "Tables\QueryStore\query_store_runtime_stats.sql" },
-	@{ Name = "query_store_runtime_stats_interval Table"; Path = "Tables\QueryStore\query_store_runtime_stats_interval.sql" },
-	@{ Name = "query_store_wait_stats Table"; Path = "Tables\QueryStore\query_store_wait_stats.sql" },
-	@{ Name = "query_store_query_PartitionMaintenance"; Path = "Tables\PartitionMaintenance\query_store_query_PartitionMaintenance.sql" },
-	@{ Name = "query_store_query_text_PartitionMaintenance"; Path = "Tables\PartitionMaintenance\query_store_query_text_PartitionMaintenance.sql" },
-	@{ Name = "query_store_plan_PartitionMaintenance"; Path = "Tables\PartitionMaintenance\query_store_plan_PartitionMaintenance.sql" },
-	@{ Name = "query_store_runtime_stats_PartitionMaintenance"; Path = "Tables\PartitionMaintenance\query_store_runtime_stats_PartitionMaintenance.sql" },
-	@{ Name = "query_store_runtime_stats_interval_PartitionMaintenance"; Path = "Tables\PartitionMaintenance\query_store_runtime_stats_interval_PartitionMaintenance.sql" },
-	@{ Name = "query_store_wait_stats_PartitionMaintenance"; Path = "Tables\PartitionMaintenance\query_store_wait_stats_PartitionMaintenance.sql" },
-	@{ Name = "usp_ManagePartitions Procedure"; Path = "StoredProcedures\usp_ManagePartitions.sql" },
-	@{ Name = "usp_InitializeDatabase Procedure"; Path = "StoredProcedures\usp_InitializeDatabase.sql" },
-	@{ Name = "usp_GetArchiveSummary Procedure"; Path = "StoredProcedures\usp_GetArchiveSummary.sql" },
-	@{ Name = "usp_ArchiveQueryStore Procedure"; Path = "StoredProcedures\usp_ArchiveQueryStore.sql" },
-	@{ Name = "usp_PurgeExpiredArchives Procedure"; Path = "StoredProcedures\usp_PurgeExpiredArchives.sql" }
+	@{ Name = "Partition Function"; Path = "Partitions/PartitionFunction.sql"; Kind = "Always" },
+	@{ Name = "Partition Scheme"; Path = "Partitions/PartitionScheme.sql"; Kind = "Always" },
+	@{ Name = "RunMetadata Table"; Path = "Tables/Core/RunMetadata.sql"; Kind = "Table"; Object = "RunMetadata" },
+	@{ Name = "DatabaseConfig Table"; Path = "Tables/Core/DatabaseConfig.sql"; Kind = "Table"; Object = "DatabaseConfig" },
+	@{ Name = "query_store_query Table"; Path = "Tables/QueryStore/query_store_query.sql"; Kind = "Table"; Object = "query_store_query" },
+	@{ Name = "query_store_query_text Table"; Path = "Tables/QueryStore/query_store_query_text.sql"; Kind = "Table"; Object = "query_store_query_text" },
+	@{ Name = "query_store_plan Table"; Path = "Tables/QueryStore/query_store_plan.sql"; Kind = "Table"; Object = "query_store_plan" },
+	@{ Name = "query_store_runtime_stats Table"; Path = "Tables/QueryStore/query_store_runtime_stats.sql"; Kind = "Table"; Object = "query_store_runtime_stats" },
+	@{ Name = "query_store_runtime_stats_interval Table"; Path = "Tables/QueryStore/query_store_runtime_stats_interval.sql"; Kind = "Table"; Object = "query_store_runtime_stats_interval" },
+	@{ Name = "query_store_wait_stats Table"; Path = "Tables/QueryStore/query_store_wait_stats.sql"; Kind = "Table"; Object = "query_store_wait_stats" },
+	@{ Name = "query_store_query_PartitionMaintenance"; Path = "Tables/PartitionMaintenance/query_store_query_PartitionMaintenance.sql"; Kind = "Table"; Object = "query_store_query_PartitionMaintenance" },
+	@{ Name = "query_store_query_text_PartitionMaintenance"; Path = "Tables/PartitionMaintenance/query_store_query_text_PartitionMaintenance.sql"; Kind = "Table"; Object = "query_store_query_text_PartitionMaintenance" },
+	@{ Name = "query_store_plan_PartitionMaintenance"; Path = "Tables/PartitionMaintenance/query_store_plan_PartitionMaintenance.sql"; Kind = "Table"; Object = "query_store_plan_PartitionMaintenance" },
+	@{ Name = "query_store_runtime_stats_PartitionMaintenance"; Path = "Tables/PartitionMaintenance/query_store_runtime_stats_PartitionMaintenance.sql"; Kind = "Table"; Object = "query_store_runtime_stats_PartitionMaintenance" },
+	@{ Name = "query_store_runtime_stats_interval_PartitionMaintenance"; Path = "Tables/PartitionMaintenance/query_store_runtime_stats_interval_PartitionMaintenance.sql"; Kind = "Table"; Object = "query_store_runtime_stats_interval_PartitionMaintenance" },
+	@{ Name = "query_store_wait_stats_PartitionMaintenance"; Path = "Tables/PartitionMaintenance/query_store_wait_stats_PartitionMaintenance.sql"; Kind = "Table"; Object = "query_store_wait_stats_PartitionMaintenance" },
+	@{ Name = "usp_ManagePartitions Procedure"; Path = "StoredProcedures/usp_ManagePartitions.sql"; Kind = "Procedure" },
+	@{ Name = "usp_InitializeDatabase Procedure"; Path = "StoredProcedures/usp_InitializeDatabase.sql"; Kind = "Procedure" },
+	@{ Name = "usp_GetArchiveSummary Procedure"; Path = "StoredProcedures/usp_GetArchiveSummary.sql"; Kind = "Procedure" },
+	@{ Name = "usp_ArchiveQueryStore Procedure"; Path = "StoredProcedures/usp_ArchiveQueryStore.sql"; Kind = "Procedure" },
+	@{ Name = "usp_PurgeExpiredArchives Procedure"; Path = "StoredProcedures/usp_PurgeExpiredArchives.sql"; Kind = "Procedure" }
 )
+
+function New-ConnectionParameters {
+	param([string]$Database, [int]$QueryTimeout = 300)
+
+	$params = @{
+		ServerInstance = $ServerInstance
+		Database = $Database
+		QueryTimeout = $QueryTimeout
+		AbortOnError = $true
+		ErrorAction = "Stop"
+	}
+	if ($Credential) { $params.Credential = $Credential }
+	if ($TrustServerCertificate) { $params.TrustServerCertificate = $true }
+	return $params
+}
+
+function Invoke-QueryVaultSql {
+	param([string]$Database, [string]$Query, [int]$QueryTimeout = 300)
+	$params = New-ConnectionParameters -Database $Database -QueryTimeout $QueryTimeout
+	return Invoke-Sqlcmd @params -Query $Query -Verbose:$false
+}
 
 function Write-Header {
 	param([string]$Message)
-	Write-Host "`n========================================" -ForegroundColor Cyan
-	Write-Host $Message -ForegroundColor Cyan
-	Write-Host "========================================`n" -ForegroundColor Cyan
+	Write-Host "`n=== $Message ===" -ForegroundColor Cyan
 }
 
-function Invoke-SqlScript {
-	param(
-		[string]$ServerInstance,
-		[string]$Database,
-		[string]$ScriptFile,
-		[PSCredential]$Credential
-	)
+$startedUtc = [DateTime]::UtcNow
+$resolvedScriptPath = (Resolve-Path -LiteralPath $ScriptPath).Path
+$effectiveGitSha = if ([string]::IsNullOrWhiteSpace($GitSha)) { "not-supplied" } else { $GitSha }
 
-	if (-not (Test-Path $ScriptFile)) {
-		throw "Script file not found: $ScriptFile"
-	}
-
-	$scriptContent = Get-Content -Path $ScriptFile -Raw
-
-	# Build connection parameters
-	$connectionParams = @{
-		ServerInstance = $ServerInstance
-		Database = $Database
-		QueryTimeout = 300
-		ErrorAction = "Stop"
-	}
-
-	if ($Credential) {
-		$connectionParams.Credential = $Credential
-	}
-
-	# Execute script
-	Invoke-Sqlcmd @connectionParams -Query $scriptContent -Verbose:$false
-}
-
-# Main deployment logic
 try {
-	Write-Header "QueryVault Database Deployment"
+	Write-Header "QueryVault production-safe deployment"
+	Write-Host "Start UTC: $($startedUtc.ToString('o'))"
+	Write-Host "Git SHA: $effectiveGitSha"
+	Write-Host "Target server: $ServerInstance"
+	Write-Host "Target database: $DatabaseName"
+	Write-Host "Canonical source: $resolvedScriptPath"
 
-	Write-Host "Server Instance: $ServerInstance" -ForegroundColor Yellow
-	Write-Host "Database Name: $DatabaseName" -ForegroundColor Yellow
-	Write-Host "Script Path: $ScriptPath`n" -ForegroundColor Yellow
-
-	# Check for SqlServer module
-	if (-not (Get-Module -ListAvailable -Name SqlServer)) {
-		Write-Warning "SqlServer PowerShell module not found. Installing..."
-		Install-Module -Name SqlServer -Scope CurrentUser -Force -AllowClobber
+	$module = Get-Module -ListAvailable -Name SqlServer | Sort-Object Version -Descending | Select-Object -First 1
+	if (-not $module) {
+		throw "Required PowerShell module 'SqlServer' is missing. Install it during runner provisioning; deployment will not install dependencies."
 	}
-
 	Import-Module SqlServer -ErrorAction Stop
-	Write-Verbose "SqlServer module loaded successfully"
+	Write-Host "SqlServer module: $($module.Version)"
 
-	# Step 1: Create database
-	Write-Header "Step 1: Creating Database"
-
-	$createDbScript = @"
-IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = '$DatabaseName')
-BEGIN
-	CREATE DATABASE [$DatabaseName];
-	PRINT 'Database $DatabaseName created successfully';
-END
-ELSE
-BEGIN
-	PRINT 'Database $DatabaseName already exists';
-END
-"@
-
-	$connectionParams = @{
-		ServerInstance = $ServerInstance
-		Database = "master"
-		QueryTimeout = 60
-		ErrorAction = "Stop"
+	$invokeSqlcmd = Get-Command Invoke-Sqlcmd -ErrorAction Stop
+	if ($TrustServerCertificate -and -not $invokeSqlcmd.Parameters.ContainsKey("TrustServerCertificate")) {
+		throw "Installed Invoke-Sqlcmd does not support -TrustServerCertificate."
 	}
-
-	if ($Credential) {
-		$connectionParams.Credential = $Credential
-	}
-
-	Invoke-Sqlcmd @connectionParams -Query $createDbScript
-	Write-Host "Database ready: $DatabaseName" -ForegroundColor Green
-
-	# Step 2: Execute deployment scripts
-	Write-Header "Step 2: Deploying Database Objects"
-
-	$stepNumber = 1
-	$totalSteps = $deploymentSteps.Count
 
 	foreach ($step in $deploymentSteps) {
-		$scriptFile = Join-Path $ScriptPath $step.Path
-
-		Write-Progress -Activity "Deploying QueryVault" -Status "Step $stepNumber of $totalSteps" -PercentComplete (($stepNumber / $totalSteps) * 100) -CurrentOperation $step.Name
-		Write-Verbose "Executing: $($step.Name)"
-
-		try {
-			Invoke-SqlScript -ServerInstance $ServerInstance -Database $DatabaseName -ScriptFile $scriptFile -Credential $Credential
-			Write-Host "[OK] $($step.Name)" -ForegroundColor Green
+		$scriptFile = Join-Path $resolvedScriptPath $step.Path
+		if (-not (Test-Path -LiteralPath $scriptFile -PathType Leaf)) {
+			throw "Required deployment source is missing: $scriptFile"
 		}
-		catch {
-			Write-Host "[FAILED] $($step.Name)" -ForegroundColor Red
-			throw "Failed to deploy $($step.Name): $_"
-		}
-
-		$stepNumber++
 	}
 
-	Write-Progress -Activity "Deploying QueryVault" -Completed
+	$dbState = Invoke-QueryVaultSql -Database "master" -Query "SET NOCOUNT ON; SELECT state_desc AS StateDescription FROM sys.databases WHERE name = N'$DatabaseName';" -QueryTimeout 30
+	if (-not $dbState) {
+		if (-not $AllowDatabaseCreate) {
+			throw "Target database '$DatabaseName' does not exist. Production deployment requires an existing database."
+		}
+		Invoke-QueryVaultSql -Database "master" -Query "CREATE DATABASE [$DatabaseName];" -QueryTimeout 120 | Out-Null
+		Write-Host "Created database '$DatabaseName' because -AllowDatabaseCreate was explicitly supplied."
+	}
+	elseif ($dbState.StateDescription -ne "ONLINE") {
+		throw "Target database '$DatabaseName' is not ONLINE; current state: $($dbState.StateDescription)"
+	}
 
-	# Step 3: Verification
-	Write-Header "Step 3: Deployment Verification"
+	$deployed = [System.Collections.Generic.List[string]]::new()
+	$skipped = [System.Collections.Generic.List[string]]::new()
 
-	$verificationScript = @"
-SELECT 
-	'Tables' AS ObjectType,
-	COUNT(*) AS ObjectCount
-FROM sys.tables 
-WHERE SCHEMA_NAME(schema_id) = 'dbo'
+	foreach ($step in $deploymentSteps) {
+		$scriptFile = Join-Path $resolvedScriptPath $step.Path
 
-UNION ALL
+		if ($step.Kind -eq "Table") {
+			$objectExists = Invoke-QueryVaultSql -Database $DatabaseName -Query "SET NOCOUNT ON; SELECT CASE WHEN OBJECT_ID(N'dbo.$($step.Object)', N'U') IS NULL THEN 0 ELSE 1 END AS ObjectExists;" -QueryTimeout 30
+			if ([int]$objectExists.ObjectExists -eq 1) {
+				$skipped.Add($step.Name)
+				Write-Host "[PRESERVED] $($step.Name) already exists; no table DDL was applied." -ForegroundColor Yellow
+				continue
+			}
+		}
 
-SELECT 
-	'Stored Procedures' AS ObjectType,
-	COUNT(*) AS ObjectCount
-FROM sys.procedures 
-WHERE SCHEMA_NAME(schema_id) = 'dbo'
+		$scriptContent = Get-Content -LiteralPath $scriptFile -Raw
+		Invoke-QueryVaultSql -Database $DatabaseName -Query $scriptContent | Out-Null
+		$deployed.Add($step.Name)
+		Write-Host "[DEPLOYED] $($step.Name)" -ForegroundColor Green
+	}
 
-UNION ALL
-
-SELECT 
-	'Partition Functions' AS ObjectType,
-	COUNT(*) AS ObjectCount
-FROM sys.partition_functions 
-WHERE name = 'PF_RunID'
-
-UNION ALL
-
-SELECT 
-	'Partition Schemes' AS ObjectType,
-	COUNT(*) AS ObjectCount
-FROM sys.partition_schemes 
-WHERE name = 'PS_RunID';
-"@
-
-	$connectionParams.Database = $DatabaseName
-	$results = Invoke-Sqlcmd @connectionParams -Query $verificationScript
-
-	$results | Format-Table -AutoSize
-
-	# Summary
-	Write-Header "Deployment Summary"
-
-	Write-Host "Database '$DatabaseName' deployed successfully!" -ForegroundColor Green
-	Write-Host "`nNext Steps:" -ForegroundColor Yellow
-	Write-Host "1. Register databases for archiving:" -ForegroundColor White
-	Write-Host "   EXEC $DatabaseName.dbo.usp_InitializeDatabase @DatabaseName = 'YourDatabaseName';" -ForegroundColor Gray
-	Write-Host "`n2. Create SQL Agent jobs:" -ForegroundColor White
-	Write-Host "   - Use Jobs\CreateArchiveJob_Template.sql for single database" -ForegroundColor Gray
-	Write-Host "   - Use Jobs\CreateArchiveJob_AllDatabases.sql for all databases" -ForegroundColor Gray
-	Write-Host "`n3. Test archiving:" -ForegroundColor White
-	Write-Host "   EXEC $DatabaseName.dbo.usp_ArchiveQueryStore" -ForegroundColor Gray
-	Write-Host "        @SourceDatabaseName = 'YourDatabaseName'," -ForegroundColor Gray
-	Write-Host "        @RunName = 'Test Archive'," -ForegroundColor Gray
-	Write-Host "        @DoNotDelete = 1;" -ForegroundColor Gray
-	Write-Host ""
-
-	Write-Host "Deployment completed successfully!" -ForegroundColor Green
+	Write-Header "Deployment result"
+	Write-Host "Deployed/refreshed: $($deployed.Count)"
+	Write-Host "Existing tables preserved: $($skipped.Count)"
+	Write-Host "SQL Agent jobs changed: 0"
+	Write-Host "End UTC: $([DateTime]::UtcNow.ToString('o'))"
 }
 catch {
-	Write-Error "Deployment failed: $_"
-	Write-Host "`nDeployment failed. Please check the error message above." -ForegroundColor Red
-	exit 1
+	Write-Error "QueryVault deployment failed: $($_.Exception.Message)"
+	throw
 }

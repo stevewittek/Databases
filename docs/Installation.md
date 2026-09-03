@@ -51,9 +51,11 @@ checksummed backup, preserves existing tables, deploys repeatable modules, and
 compares post-deployment data/configuration/job state. Trust-server-certificate
 is a lab exception; production should use a trusted SQL Server certificate.
 
-On Voyager2, the GitHub Actions workflow is manual-dispatch only and accepts
-`master`. Do not merge or dispatch until branch reconciliation and approval are
-complete.
+On Voyager2, the production GitHub Actions workflow accepts manual dispatches
+from `master` and automatically runs for pushes to `master` that modify
+`QueryVault/**`. Both paths use the protected `queryvault-production`
+environment and the guarded production sequence. Pull requests use a separate
+GitHub-hosted static-validation workflow and never use the Voyager2 runner.
 
 ## Grafana reader and package
 

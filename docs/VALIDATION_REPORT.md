@@ -6,7 +6,9 @@ The cumulative candidate at
 `65336e2c1588351712e8bd7c8c85af0238cdbeed` was deployed to Voyager2 through
 the guarded production workflow. A necessary Grafana-only display fix was then
 committed as `cb06d520fa87d043495a2b50d507181e5783f929` and the complete affected
-Grafana validation was rerun.
+Grafana validation was rerun. After integration, current `master` at
+`dc0f471038776832d303168d660082dcab143fff` was deployed successfully by
+[production workflow run 33803899971](https://github.com/stevewittek/Databases/actions/runs/33803899971).
 
 The full evidence, exact values, environment notes, and acceptance matrix are
 in [Voyager2 RC Validation](VOYAGER2_RC_VALIDATION.md).
@@ -105,10 +107,15 @@ It also wrote the pre-deployment state baseline:
 `/home/nasa/queryvault-production/baselines/QueryVaultDB_20260903T133908Z_65336e2c1588.json`
 
 An additional checksum-verified pre-bootstrap copy-only backup is recorded in
-the full validation document. No SQL Agent job was changed.
+the full validation document. The later current-`master` deployment created and
+verified
+`/var/opt/mssql/userlog/backups/voyager2/QueryVaultDB/FULL/voyager2_QueryVaultDB_FULL_20260903_204355_predeploy_copyonly.bak`.
+Its pre/post checks passed, all 22 existing tables and archive data were
+preserved, and no SQL Agent job was changed.
 
 ## Release conclusion
 
-The final candidate is safe to merge to `master` after normal review. No merge
-was performed. No RuntimeStats or WaitStats storage conversion was performed,
-and this report is not authorization for one.
+The validated candidate was integrated into `master` and its current commit was
+deployed successfully through the guarded workflow. No RuntimeStats or
+WaitStats storage conversion was performed, and this report is not
+authorization for one.

@@ -75,6 +75,8 @@ acts on the entire physical partition and could otherwise remove another run.
 
 ## Production workflow will not run from the branch
 
-This is expected: the current Voyager2 workflow is manual-dispatch and gates the
-job to `master`. Review and reconcile the branch, merge only after approval, and
-then manually dispatch the reviewed commit. Do not bypass the branch gate.
+This is expected: the Voyager2 deployment job is gated to `master`. Automatic
+deployment runs only for pushes to `master` that modify `QueryVault/**`; manual
+dispatch remains available from `master`. Pull requests run only the separate
+GitHub-hosted static checks. Review and merge through the normal approval path;
+do not bypass the production branch or environment gates.

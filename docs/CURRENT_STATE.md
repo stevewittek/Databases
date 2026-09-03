@@ -1,10 +1,9 @@
 # QueryVault Current State
 
-Status date: 2026-09-03. Release-candidate branch:
-`codex/queryvault-v1-rc`. The requested database candidate
-`65336e2c1588351712e8bd7c8c85af0238cdbeed` is deployed on Voyager2. A
-necessary Grafana-only field-formatting fix is recorded at
-`cb06d520fa87d043495a2b50d507181e5783f929`.
+Status date: 2026-09-03. Production branch: `master`. Commit
+`dc0f471038776832d303168d660082dcab143fff` is deployed on Voyager2 through the
+guarded production workflow. It contains the validated database candidate, the
+Grafana field-formatting correction, and the release-candidate documentation.
 
 ## Current architecture
 
@@ -199,6 +198,14 @@ reporting-contract replacement.
   calls pass against persistent data.
 - Native Showplan XML was exported successfully. Graphical opening in SSMS is
   not tested because SSMS was unavailable.
+
+The follow-up production deployment of current `master` passed pre-deployment
+and post-deployment verification, created and checksum-verified the new
+copy-only backup
+`/var/opt/mssql/userlog/backups/voyager2/QueryVaultDB/FULL/voyager2_QueryVaultDB_FULL_20260903_204355_predeploy_copyonly.bak`,
+preserved all 22 existing tables and archive data, and changed zero SQL Agent
+jobs. The workflow run is
+[33803899971](https://github.com/stevewittek/Databases/actions/runs/33803899971).
 
 See [Voyager2 RC Validation](VOYAGER2_RC_VALIDATION.md) for exact evidence and
 the acceptance matrix.

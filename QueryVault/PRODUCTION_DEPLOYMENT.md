@@ -11,7 +11,7 @@ no GitHub Actions workflow YAML.
 - Production server: `localhost` on Voyager 2
 - Production database: `QueryVaultDB`
 - GitHub Environment: `queryvault-production`
-- Runner labels: `self-hosted`, `linux`, `x64`, `voyager2`, `queryvault-prod`
+- Runner labels: `self-hosted`, `Linux`, `X64`, `voyager2`, `queryvault-prod`
 - Runner directory: `/home/nasa/actions-runner-queryvault`
 - Runner work directory: `/home/nasa/actions-runner-queryvault/_work-queryvault`
 - Local credential file: `/home/nasa/.config/queryvault-production/sql.env`
@@ -136,9 +136,9 @@ service using GitHub's displayed service commands. This last service installatio
 requires `sudo` and should run as the `nasa` account unless a dedicated OS account
 is created by an administrator.
 
-## Workflow learning checklist
+## Workflow contract
 
-The production workflow you create should:
+The production workflow:
 
 1. trigger for `master` changes limited to `QueryVault/**`, plus manual dispatch;
 2. use the `queryvault-production` environment;
@@ -150,6 +150,11 @@ The production workflow you create should:
 8. call the single local production command above;
 9. preserve logs and the baseline path even when a step fails;
 10. rely on the command's nonzero exit status to fail the job.
+
+Pull requests use `.github/workflows/queryvault-ci.yml` on `ubuntu-latest` for
+repository-contract, PowerShell-parser, dashboard JSON, and provisioning YAML
+checks. That workflow has no production environment, self-hosted runner, SQL
+credential, remote host, or database connection.
 
 Never place a SQL password, GitHub token, or runner registration token in the
 workflow file or repository.

@@ -50,7 +50,7 @@ Status date: 2026-09-03. Allowed classifications are `IMPLEMENTED`, `PARTIAL`,
 | Mark active captures PROVISIONAL | PARTIAL | Canonical schema/materializer support `PROVISIONAL`; normal capture intentionally excludes active intervals. |
 | Reconcile provisional observations after close | MISSING | Deterministic rematerialization exists, but source recapture/replacement scheduling and audited state transitions do not. |
 | Do not treat native row IDs as canonical keys | IMPLEMENTED | Contributor surrogate keys retain native IDs; canonical primary keys use documented grains. |
-| Preserve SQL Server 2022+ replica contribution | IMPLEMENTED | Version-aware capture retains `replica_group_id` per contributor without changing canonical grain. Live 2022+ capture validation remains. |
+| Preserve SQL Server 2022+ replica contribution | IMPLEMENTED | Version-aware capture retains `replica_group_id` per contributor without changing canonical grain. The capture path passed on Voyager2 SQL Server 17.0.4075.5; a live workload containing multiple replica contributors remains desirable rather than a release gate. |
 
 ## Reporting contract
 
@@ -82,20 +82,19 @@ No web UI, custom plan renderer, or live-monitoring surface is implemented.
 | Deterministic aggregation tests | IMPLEMENTED | Contributor/canonical fixture covers more than the original correctness minimum and rolls back. |
 | Deterministic run lifecycle tests | IMPLEMENTED | Allocation, sparse policy, defaults/validation, warning/max/ceiling, alignment, real switch/truncate/merge, pin, purge, and reporting/canonical regressions pass transactionally. |
 | Legacy overflow migration | NEEDS REDESIGN | Local validation found RunID 1004 in the populated overflow above boundary 120. The guard prevents an unsafe CCI split; migration must be separately reviewed and tested. |
-| Live Voyager2 acceptance | NEEDS VALIDATION | This branch was not deployed to Voyager2. |
-| SQL Server 2022+ replica capture | NEEDS VALIDATION | Static/synthetic behavior passes; a live 2022+ source capture was unavailable. |
+| Live Voyager2 acceptance | IMPLEMENTED | The V1 candidate passed guarded deployment, database/reporting validation, and Grafana acceptance on Voyager2; current `master` was subsequently redeployed successfully by workflow run 33803899971. |
+| SQL Server 2022+ replica capture | IMPLEMENTED | A bounded live capture on Voyager2 SQL Server 17.0.4075.5 exercised the version-aware contributor path. Deterministic fixtures cover non-null and multi-replica lineage; a naturally occurring live multi-replica sample remains desirable. |
 | Production storage recommendation thresholds | NEEDS VALIDATION | The initial 100,000-row/recent-20-run advisory is deliberately non-mutating and requires representative benchmarks. |
 
 ## Safe next sequence
 
-1. Review and integrate this branch on top of the lead Mac reporting workstream.
-2. Generate and review an SSDT deployment plan against a production-like copy;
+1. Generate and review an SSDT deployment plan against a production-like copy;
    do not infer a safe rewrite of populated overflow partitions.
-3. Design and test the legacy-overflow migration separately.
-4. Benchmark rowstore, columnstore, and `COLUMNSTORE_ARCHIVE` using
+2. Design and test the legacy-overflow migration separately.
+3. Benchmark rowstore, columnstore, and `COLUMNSTORE_ARCHIVE` using
    production-shaped runtime and wait volumes.
-5. Add authoritative retention classifications and environment snapshots.
-6. Design active-interval recapture/reconciliation before enabling provisional
+4. Add authoritative retention classifications and environment snapshots.
+5. Design active-interval recapture/reconciliation before enabling provisional
    capture.
 
 This work avoided a broad redesign: it reused RunID, kept reporting stable,

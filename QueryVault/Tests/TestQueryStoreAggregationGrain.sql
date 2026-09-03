@@ -1,85 +1,114 @@
 /*
-	Read-only regression checks for the Query Store capture grain.
+	Transactional regression checks for Query Store canonical aggregation.
 
-	Microsoft documents that an active Query Store interval may expose multiple
-	runtime rows at (plan_id, execution_type, runtime_stats_interval_id) and
-	multiple wait rows at that grain plus wait_category. QueryVault avoids that
-	ambiguity by preferring intervals older than one flush interval and rejecting
-	repeated documented-grain rows before a new run can complete. Rejection is a
-	safety guard, not canonical source aggregation.
+	Native contributor rows are lossless. Complete observations are materialized
+	at Microsoft's documented runtime and wait grains. Legacy archive rows are
+	reported for audit purposes and are not rejected during this additive upgrade.
 */
+
+:on error exit
+
+USE [QueryVaultDB];
+GO
 
 SET NOCOUNT ON;
 SET XACT_ABORT ON;
+GO
 
-IF OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P') IS NULL
-	OR OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%flush_interval_seconds%'
-	THROW 51100, 'Capture regression: Query Store flush interval cutoff is missing.', 1;
+BEGIN TRANSACTION;
+GO
 
-IF OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P') IS NULL
-	OR OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%i.end_time <= @EndDateTime%'
-	THROW 51101, 'Capture regression: completed interval end-time filter is missing.', 1;
+:r ..\Tables\QueryStore\query_store_runtime_stats_contributor.sql
+:r ..\Tables\QueryStore\query_store_runtime_stats_canonical.sql
+:r ..\Tables\QueryStore\query_store_wait_stats_contributor.sql
+:r ..\Tables\QueryStore\query_store_wait_stats_canonical.sql
+:r ..\StoredProcedures\usp_MaterializeCanonicalQueryStoreStats.sql
+:r ..\StoredProcedures\usp_ArchiveQueryStore.sql
+GO
 
-IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%GROUP BY plan_id, execution_type, runtime_stats_interval_id%'
-	THROW 51106, 'Capture regression: runtime duplicate-grain rejection guard is missing.', 1;
+BEGIN TRY
+	IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%flush_interval_seconds%'
+		THROW 51100, 'Capture regression: Query Store flush interval cutoff is missing.', 1;
 
-IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%GROUP BY plan_id, runtime_stats_interval_id, execution_type, wait_category%'
-	THROW 51107, 'Capture regression: wait duplicate-grain rejection guard is missing.', 1;
+	IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%i.end_time <= @EndDateTime%'
+		THROW 51101, 'Capture regression: completed interval end-time filter is missing.', 1;
 
-IF EXISTS
-(
-	SELECT 1
+	IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%query_store_runtime_stats_contributor%'
+		OR OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%query_store_wait_stats_contributor%'
+		OR OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%usp_MaterializeCanonicalQueryStoreStats%'
+		THROW 51102, 'Capture regression: contributor capture or canonical materialization is missing.', 1;
+
+	IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_MaterializeCanonicalQueryStoreStats', N'P'))
+		NOT LIKE N'%GROUP BY c.RunID, c.plan_id, c.runtime_stats_interval_id, c.execution_type%'
+		THROW 51103, 'Runtime canonical grain is missing.', 1;
+
+	IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_MaterializeCanonicalQueryStoreStats', N'P'))
+		NOT LIKE N'%w.execution_type, w.wait_category%'
+		THROW 51104, 'Wait canonical grain is missing.', 1;
+
+	IF EXISTS
+	(
+		SELECT 1
+		FROM dbo.query_store_runtime_stats_canonical
+		GROUP BY RunID, plan_id, execution_type, runtime_stats_interval_id
+		HAVING COUNT_BIG(*) > 1
+	)
+		THROW 51105, 'Canonical runtime data contains duplicate documented-grain groups.', 1;
+
+	IF EXISTS
+	(
+		SELECT 1
+		FROM dbo.query_store_wait_stats_canonical
+		GROUP BY RunID, plan_id, runtime_stats_interval_id, execution_type, wait_category
+		HAVING COUNT_BIG(*) > 1
+	)
+		THROW 51106, 'Canonical wait data contains duplicate documented-grain groups.', 1;
+
+	IF EXISTS
+	(
+		SELECT 1
+		FROM dbo.query_store_runtime_stats_contributor AS rs
+		LEFT JOIN dbo.query_store_runtime_stats_interval AS i
+			ON i.RunID = rs.RunID
+			AND i.runtime_stats_interval_id = rs.runtime_stats_interval_id
+		WHERE i.runtime_stats_interval_id IS NULL
+	)
+		THROW 51107, 'Runtime contributor data contains an orphaned interval reference.', 1;
+
+	IF EXISTS
+	(
+		SELECT 1
+		FROM dbo.query_store_wait_stats_contributor AS ws
+		LEFT JOIN dbo.query_store_runtime_stats_interval AS i
+			ON i.RunID = ws.RunID
+			AND i.runtime_stats_interval_id = ws.runtime_stats_interval_id
+		WHERE i.runtime_stats_interval_id IS NULL
+	)
+		THROW 51108, 'Wait contributor data contains an orphaned interval reference.', 1;
+
+	-- Existing pre-upgrade rows can contain native duplicates. Report them; do
+	-- not discard or reinterpret them as canonical observations.
+	SELECT N'legacy_runtime_duplicate_group' AS audit_issue,
+		RunID, plan_id, execution_type, runtime_stats_interval_id,
+		COUNT_BIG(*) AS native_row_count
 	FROM dbo.query_store_runtime_stats
 	GROUP BY RunID, plan_id, execution_type, runtime_stats_interval_id
-	HAVING COUNT_BIG(*) > 1
-)
-	THROW 51102, 'Archived runtime data contains duplicate documented-grain groups.', 1;
+	HAVING COUNT_BIG(*) > 1;
 
-IF EXISTS
-(
-	SELECT 1
+	SELECT N'legacy_wait_duplicate_group' AS audit_issue,
+		RunID, plan_id, runtime_stats_interval_id, execution_type, wait_category,
+		COUNT_BIG(*) AS native_row_count
 	FROM dbo.query_store_wait_stats
 	GROUP BY RunID, plan_id, runtime_stats_interval_id, execution_type, wait_category
-	HAVING COUNT_BIG(*) > 1
-)
-	THROW 51103, 'Archived wait data contains duplicate documented-grain groups.', 1;
+	HAVING COUNT_BIG(*) > 1;
 
-IF EXISTS
-(
-	SELECT 1
-	FROM dbo.query_store_runtime_stats AS rs
-	LEFT JOIN dbo.query_store_runtime_stats_interval AS i
-		ON i.RunID = rs.RunID
-		AND i.runtime_stats_interval_id = rs.runtime_stats_interval_id
-	WHERE i.runtime_stats_interval_id IS NULL
-)
-	THROW 51104, 'Archived runtime data contains an orphaned interval reference.', 1;
-
-IF EXISTS
-(
-	SELECT 1
-	FROM dbo.query_store_wait_stats AS ws
-	LEFT JOIN dbo.query_store_runtime_stats_interval AS i
-		ON i.RunID = ws.RunID
-		AND i.runtime_stats_interval_id = ws.runtime_stats_interval_id
-	WHERE i.runtime_stats_interval_id IS NULL
-)
-	THROW 51105, 'Archived wait data contains an orphaned interval reference.', 1;
-
--- Boundary violations are reported rather than rejected because installations
--- upgraded from pre-cutoff releases can retain historically partial periods.
-SELECT
-	rm.RunID AS period_id,
-	rm.RunName AS period_name,
-	rm.RunStartTime AS archived_at_utc,
-	rm.EndDateTime AS recorded_period_end_utc,
-	MAX(i.end_time) AS latest_archived_interval_end_utc
-FROM dbo.RunMetadata AS rm
-INNER JOIN dbo.query_store_runtime_stats_interval AS i
-	ON i.RunID = rm.RunID
-GROUP BY rm.RunID, rm.RunName, rm.RunStartTime, rm.EndDateTime
-HAVING MAX(i.end_time) > rm.EndDateTime
-ORDER BY rm.RunID;
-
-SELECT N'PASS' AS result,
-	N'Capture cutoff and rejection guards present; no duplicate documented-grain groups or orphaned interval references.' AS detail;
+	ROLLBACK TRANSACTION;
+	SELECT N'PASS' AS result,
+		N'Contributor capture, completed-interval cutoff, canonical grains, and uniqueness validated.' AS detail;
+END TRY
+BEGIN CATCH
+	IF XACT_STATE() <> 0
+		ROLLBACK TRANSACTION;
+	THROW;
+END CATCH;
+GO

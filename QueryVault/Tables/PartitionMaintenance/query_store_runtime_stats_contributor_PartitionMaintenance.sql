@@ -1,0 +1,93 @@
+/*
+	Partition-maintenance mirror for native Query Store runtime rows retained as contributor lineage.
+	Multiple rows may legitimately contribute to one canonical observation.
+*/
+
+CREATE TABLE dbo.query_store_runtime_stats_contributor_PartitionMaintenance
+(
+	RunID INT NOT NULL,
+	runtime_stats_contributor_id BIGINT IDENTITY(1,1) NOT NULL,
+	runtime_stats_id BIGINT NOT NULL,
+	plan_id BIGINT NOT NULL,
+	runtime_stats_interval_id BIGINT NOT NULL,
+	execution_type TINYINT NOT NULL,
+	execution_type_desc NVARCHAR(128) NULL,
+	first_execution_time DATETIMEOFFSET(7) NOT NULL,
+	last_execution_time DATETIMEOFFSET(7) NOT NULL,
+	count_executions BIGINT NOT NULL,
+	avg_duration FLOAT NULL,
+	last_duration BIGINT NOT NULL,
+	min_duration BIGINT NOT NULL,
+	max_duration BIGINT NOT NULL,
+	stdev_duration FLOAT NULL,
+	avg_cpu_time FLOAT NULL,
+	last_cpu_time BIGINT NOT NULL,
+	min_cpu_time BIGINT NOT NULL,
+	max_cpu_time BIGINT NOT NULL,
+	stdev_cpu_time FLOAT NULL,
+	avg_logical_io_reads FLOAT NULL,
+	last_logical_io_reads BIGINT NOT NULL,
+	min_logical_io_reads BIGINT NOT NULL,
+	max_logical_io_reads BIGINT NOT NULL,
+	stdev_logical_io_reads FLOAT NULL,
+	avg_logical_io_writes FLOAT NULL,
+	last_logical_io_writes BIGINT NOT NULL,
+	min_logical_io_writes BIGINT NOT NULL,
+	max_logical_io_writes BIGINT NOT NULL,
+	stdev_logical_io_writes FLOAT NULL,
+	avg_physical_io_reads FLOAT NULL,
+	last_physical_io_reads BIGINT NOT NULL,
+	min_physical_io_reads BIGINT NOT NULL,
+	max_physical_io_reads BIGINT NOT NULL,
+	stdev_physical_io_reads FLOAT NULL,
+	avg_clr_time FLOAT NULL,
+	last_clr_time BIGINT NOT NULL,
+	min_clr_time BIGINT NOT NULL,
+	max_clr_time BIGINT NOT NULL,
+	stdev_clr_time FLOAT NULL,
+	avg_dop FLOAT NULL,
+	last_dop BIGINT NOT NULL,
+	min_dop BIGINT NOT NULL,
+	max_dop BIGINT NOT NULL,
+	stdev_dop FLOAT NULL,
+	avg_query_max_used_memory FLOAT NULL,
+	last_query_max_used_memory BIGINT NOT NULL,
+	min_query_max_used_memory BIGINT NOT NULL,
+	max_query_max_used_memory BIGINT NOT NULL,
+	stdev_query_max_used_memory FLOAT NULL,
+	avg_rowcount FLOAT NULL,
+	last_rowcount BIGINT NOT NULL,
+	min_rowcount BIGINT NOT NULL,
+	max_rowcount BIGINT NOT NULL,
+	stdev_rowcount FLOAT NULL,
+	avg_num_physical_io_reads FLOAT NULL,
+	last_num_physical_io_reads BIGINT NULL,
+	min_num_physical_io_reads BIGINT NULL,
+	max_num_physical_io_reads BIGINT NULL,
+	stdev_num_physical_io_reads FLOAT NULL,
+	avg_log_bytes_used FLOAT NULL,
+	last_log_bytes_used BIGINT NULL,
+	min_log_bytes_used BIGINT NULL,
+	max_log_bytes_used BIGINT NULL,
+	stdev_log_bytes_used FLOAT NULL,
+	avg_tempdb_space_used FLOAT NULL,
+	last_tempdb_space_used BIGINT NULL,
+	min_tempdb_space_used BIGINT NULL,
+	max_tempdb_space_used BIGINT NULL,
+	stdev_tempdb_space_used FLOAT NULL,
+	avg_page_server_io_reads FLOAT NULL,
+	last_page_server_io_reads BIGINT NULL,
+	min_page_server_io_reads BIGINT NULL,
+	max_page_server_io_reads BIGINT NULL,
+	stdev_page_server_io_reads FLOAT NULL,
+	replica_group_id BIGINT NULL,
+
+	CONSTRAINT PK_query_store_runtime_stats_contributor_PartitionMaintenance
+		PRIMARY KEY NONCLUSTERED (RunID, runtime_stats_contributor_id)
+) ON PS_RunID(RunID);
+GO
+CREATE CLUSTERED COLUMNSTORE INDEX CCI_query_store_runtime_stats_contributor_PartitionMaintenance
+	ON dbo.query_store_runtime_stats_contributor_PartitionMaintenance
+	WITH (COMPRESSION_DELAY = 0 MINUTES)
+	ON PS_RunID(RunID);
+GO

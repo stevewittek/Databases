@@ -8,6 +8,31 @@ AS
 		rm.StartDateTime AS period_start_utc,
 		rm.EndDateTime AS period_end_utc,
 		rm.RunStatus AS period_status,
+		CASE
+			WHEN EXISTS
+			(
+				SELECT 1
+				FROM dbo.query_store_runtime_stats_canonical AS runtime_state
+				WHERE runtime_state.RunID = rm.RunID
+					AND runtime_state.observation_state = N'PROVISIONAL'
+			)
+			OR EXISTS
+			(
+				SELECT 1
+				FROM dbo.query_store_wait_stats_canonical AS wait_state
+				WHERE wait_state.RunID = rm.RunID
+					AND wait_state.observation_state = N'PROVISIONAL'
+			)
+				THEN N'PROVISIONAL'
+			WHEN EXISTS
+			(
+				SELECT 1
+				FROM dbo.query_store_runtime_stats_canonical AS runtime_state
+				WHERE runtime_state.RunID = rm.RunID
+			)
+				THEN N'COMPLETED'
+			ELSE N'LEGACY_UNVERIFIED'
+		END AS observation_state,
 		CAST(NULL AS NVARCHAR(100)) AS period_classification,
 		rm.DoNotDelete AS is_protected,
 		rm.RetentionDate AS retention_utc,

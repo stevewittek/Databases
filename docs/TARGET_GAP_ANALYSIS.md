@@ -1,86 +1,79 @@
-# QueryVault Target and Gap Analysis
+# QueryVault Target Gap Analysis
 
-Status date: 2026-09-03. Status meanings are `IMPLEMENTED`, `PARTIAL`,
-`MISSING`, `NEEDS REDESIGN`, `NEEDS VALIDATION`, and `BLOCKED`.
+Status date: 2026-09-03. Allowed classifications are IMPLEMENTED, PARTIAL,
+MISSING, NEEDS REDESIGN, and NEEDS VALIDATION.
 
-## Core archive and safety
+## Approved core requirements
 
-| Capability | Status | Integrated implementation | Remaining target |
+| # | Requirement | Status | Current evidence and remaining gap |
 | --- | --- | --- | --- |
-| Preserve Query Store history | PARTIAL | Six Query Store surfaces copied by UTC window into a centralized archive | Define logical-period idempotency, overlap policy, source identity, and completeness/reconciliation state |
-| Completed-interval preference | IMPLEMENTED | Effective end is capped at one flush interval before now; interval end predicate is enforced | Prove source consistency under cleanup/concurrent Query Store change |
-| Runtime source aggregation | PARTIAL | Duplicate documented-grain observations reject and roll back the run | Build one canonical source aggregate with defined metric and lineage semantics |
-| Wait source aggregation | PARTIAL | Equivalent category-grain rejection guard | Define canonical total/average/extrema/last/dispersion behavior tied to executions |
-| Identity-jump partition growth | IMPLEMENTED | Adds `max(10, RunID - maximum boundary)` boundaries | Serialize concurrent partition extension |
-| Shared-partition protection | IMPLEMENTED | Switch and truncate reject another `RunID` in the physical partition | Decouple logical periods from physical storage partitions |
-| Direct maintenance transaction safety | IMPLEMENTED | Direct switch/truncate owns and rolls back only its own transaction | Expand concurrency and populated-fact testing |
-| Retention purge | PARTIAL | Dry-run, completed/unprotected/expired eligibility, transactional per-run purge | Add explicit Rolling/Baseline/Incident/Pinned policy and audit transitions |
-| Columnstore storage | NEEDS VALIDATION | CCI exists on all archive and maintenance tables | Benchmark facts separately from text/plan/dimension data and evaluate archive compression |
-| Native metadata preservation | PARTIAL | Broad query/text/plan/runtime/wait fields retained | Add context settings, Query Store options, environment snapshot, replica lineage, and version policy |
+| 1 | Preserve selected Query Store periods outside normal retention | IMPLEMENTED | Completed intervals, metadata, contributor facts, and canonical facts are stored in QueryVaultDB under RunMetadata periods. Window overlap/idempotency policy remains desirable but does not prevent preservation. |
+| 2 | Rolling, Baseline, Incident, and Pinned classifications | MISSING | DoNotDelete and RetentionDate exist, but the approved controlled classifications and transition history do not. |
+| 3 | Separate logical periods from physical partitions | NEEDS REDESIGN | RunID is both period identity and partition key. Safety guards reject shared physical partitions; they do not decouple the concepts. |
+| 4 | Partition-friendly high-volume fact storage | IMPLEMENTED | Runtime/wait contributor and canonical tables are RunID-partitioned with aligned keys and maintenance tables. The long-term physical key should be revisited with requirement 3. |
+| 5 | Evaluate clustered columnstore for RuntimeStats and WaitStats | NEEDS VALIDATION | CCI is implemented on legacy, contributor, canonical, and maintenance tables. Workload compression, load, point-lookup, and reporting benchmarks have not been completed. |
+| 6 | Partition switching for efficient expiration | PARTIAL | Aligned switch/truncate paths and multi-RunID safety guards exist. Coupling to RunID, concurrency, and populated canonical-fact expiration require production-shaped validation. |
+| 7 | Evaluate COLUMNSTORE_ARCHIVE for cold preserved partitions | MISSING | No compression-tier transition or benchmark exists. |
+| 8 | Preserve native Query Store metadata needed for interpretation | PARTIAL | Query text, query, plan, interval, runtime, wait, native row IDs, and SQL Server 2022+ replica lineage are retained. Context settings, Query Store options, and an explicit version adapter remain missing. |
+| 9 | Deduplicate immutable query text and Showplan XML where safe | MISSING | Query text and plans are repeated by RunID. No content-addressed immutable-object store or reference migration exists. |
+| 10 | Preserve environment/configuration metadata for comparison | PARTIAL | Source server/database and selected engine/compatibility fields are stored. Database-scoped configuration, Query Store options, hardware/edition, and other environment snapshots are absent. |
 
-## Smallest correct source-aggregation design
+## Hard Query Store correctness
 
-Do not replace the fail-closed guard with `DISTINCT`, arbitrary `MIN`/`MAX`, or
-last-writer selection. Those approaches silently discard measurements.
+| Requirement | Status | Current evidence and remaining gap |
+| --- | --- | --- |
+| Runtime aggregation at (plan_id, execution_type, runtime_stats_interval_id) | IMPLEMENTED | Every native row is retained as a contributor; canonical counts, weighted means, extrema, chronological last values, ambiguity, dispersion status, and replica lineage are materialized with a unique canonical key. |
+| Wait aggregation at (plan_id, runtime_stats_interval_id, execution_type, wait_category) | IMPLEMENTED | Additive total, runtime-execution denominator, extrema, ambiguity, conservative dispersion, contributor IDs, and replica lineage are implemented. Live SQL Server 2022+ multi-contributor evidence is still desirable. |
+| Prefer completed Query Store intervals | IMPLEMENTED | Capture caps the end by flush_interval_seconds and requires interval end at or before the effective end. |
+| Mark active captures PROVISIONAL | PARTIAL | Canonical facts and the materializer support PROVISIONAL. The normal capture procedure intentionally excludes active intervals. |
+| Reconcile provisional observations after interval close | MISSING | Rematerialization is deterministic, but there is no source recapture/replacement scheduler or state-transition audit. |
+| Do not treat native row IDs as canonical keys | IMPLEMENTED | Contributor surrogate keys retain native IDs; canonical primary keys use documented grains. |
+| Preserve SQL Server 2022+ replica contribution | IMPLEMENTED | Version-aware capture stores replica_group_id per contributor. Mixed replicas are summarized without changing canonical grain. Live SQL Server 2022+ capture validation remains. |
 
-The smallest safe follow-on is a versioned capture adapter, behind the unchanged
-`qv_report` contract, that:
+## Reporting contract
 
-1. materializes the selected source interval/runtime/wait rows in one consistent
-   staging scope;
-2. groups runtime rows by `(plan_id, execution_type,
-   runtime_stats_interval_id)` and wait rows by that grain plus
-   `wait_category`;
-3. sums execution/additive totals, calculates execution-weighted means, combines
-   minima/maxima, chooses “last” values from the row with the latest execution
-   time, and uses a reviewed pooled-variance formula for dispersion;
-4. preserves every contributing source identifier and replica group as lineage,
-   instead of relabeling `MIN(runtime_stats_id)` as though it were a native
-   observation;
-5. reconciles staged counts/totals to the inserted canonical rows; and
-6. leaves the current guard in place until tests prove those semantics.
+| Contract capability | Status | Implementation |
+| --- | --- | --- |
+| Stable qv_report boundary | IMPLEMENTED | Six views and one procedure isolate internal tables; every dashboard query uses qv_report. |
+| VaultPeriods | IMPLEMENTED | qv_report.periods |
+| WorkloadSummary | IMPLEMENTED | qv_report.period_metrics |
+| TopQueries | IMPLEMENTED | ordering/filtering over qv_report.query_period_metrics |
+| WaitSummary | IMPLEMENTED | qv_report.wait_period_metrics |
+| QueryPerformance | IMPLEMENTED | qv_report.query_period_metrics |
+| PlanHistory | IMPLEMENTED | qv_report.query_plans |
+| PeriodComparison | IMPLEMENTED | paired period_metrics/query_period_metrics/wait_period_metrics queries used by the existing dashboard |
+| QueryDetail | IMPLEMENTED | query_period_metrics, query_wait_period_metrics, and query_plans |
+| GetPlan/native Showplan XML | IMPLEMENTED | qv_report.usp_GetShowplanXml and qv_report.query_plans.showplan_xml |
+| Canonical/legacy isolation | IMPLEMENTED | Reporting prefers canonical facts per run and falls back to legacy only when no canonical facts exist. Observation state exposes COMPLETED, PROVISIONAL, or LEGACY_UNVERIFIED. |
 
-The current archive row shape cannot represent multi-row lineage without
-misstating a native identifier. Because this integration is not authorized to
-redesign internal schema, aggregation is documented but not fabricated here.
-Current completed-only capture remains safe-by-rejection but is not complete
-support for source multiplicity.
+No web UI, custom plan renderer, or live-monitoring surface is implemented or
+planned by this branch.
 
-## Reporting and visualization
+## Other engineering gaps
 
-| Capability | Status | Integrated implementation | Remaining target |
-| --- | --- | --- | --- |
-| Stable reporting boundary | IMPLEMENTED | Six views and one procedure under `qv_report`; no dashboard uses `dbo` | Deploy after DBA schema bootstrap and live validation |
-| Overview dashboard | IMPLEMENTED | Periods, classification placeholder, executions, CPU, duration, reads, query/plan counts, waits | Render against approved live Grafana |
-| Period Comparison | IMPLEMENTED | Baseline/comparison variables, workload/query/plan/wait deltas | Add duration normalization only through an additive contract change |
-| Wait Analysis | IMPLEMENTED | Distribution, baseline change, selected-wait contributors | Validate empty/sparse waits in live UI |
-| Query Detail | IMPLEMENTED | Text preview, metrics, waits, plans, period history | Validate query identity across known Query Store lifecycle events |
-| Native Showplan path | IMPLEMENTED | XML view/procedure and `.sqlplan`/SSMS workflow | Complete one live export/open acceptance test |
-| Period classification | MISSING | Nullable contract column; explicit “Unclassified” display | Add authoritative controlled classification without inferring run names |
-| Least-privilege reader | BLOCKED | Password-free provisioning scripts and `dbo` ownership design | DBA bootstrap, login creation, positive API and negative internal-table tests |
-| Grafana provisioning | NEEDS VALIDATION | Native MSSQL datasource and four file-provisioned dashboards | Load into a dedicated/approved QueryVault Grafana instance |
+| Capability | Status | Remaining work |
+| --- | --- | --- |
+| Same-point-in-time source snapshot | NEEDS REDESIGN | Stage the selected Query Store surfaces under a documented consistency strategy that remains safe during Query Store cleanup. |
+| Capture-window idempotency | MISSING | Define source identity and overlap/retry policy. |
+| Remote source capture | MISSING | Current three-part names target the local SQL Server instance. |
+| SQL Server version compatibility | PARTIAL | Replica columns are version-aware; newer query/plan/runtime columns need an explicit adapter and supported-version tests. |
+| SSDT model | IMPLEMENTED | Visual Studio 2026 SSDT builds 38 objects with zero warnings/errors. |
+| Deterministic aggregation tests | IMPLEMENTED | Synthetic test covers more than the 14 required correctness cases and rolls back all database changes. |
+| Live Voyager2 acceptance | NEEDS VALIDATION | Direct hostname connection was unavailable from this PC. No deployment was attempted. |
+| Retention integration test on this PC | NEEDS VALIDATION | Local QueryVaultDB predates the purge procedure and has no auto-delete configuration; procedure compilation and partition safety pass, but the existing purge scenario needs an approved suitable database. |
 
-## Build, deployment, and testing
+## Safe next sequence
 
-| Capability | Status | Integrated implementation | Remaining target |
-| --- | --- | --- | --- |
-| SSDT model | IMPLEMENTED | Declarative model sources, `master.dacpac` reference, operational/model synchronization tests | Rebuild integrated 29-object model in the verified Voyager1 SSDT environment |
-| Production-safe deployer | IMPLEMENTED | Preserves tables/data, deploys repeatable core/reporting modules, checks schema ownership | Validate integrated branch transactionally on Voyager2; do not dispatch yet |
-| Repository tests | IMPLEMENTED | Model/source sync plus partition, capture-grain, reporting, and asset checks | Add automated CI on an approved disposable SQL Server/Grafana environment |
-| Existing deployments | NEEDS VALIDATION | Deployment avoids inferred table migrations | Inventory legacy constraints/table shape and use reviewed migrations only |
+1. Review and integrate this branch on top of the Mac reporting workstream.
+2. Validate additive deployment planning against a copy of Voyager2 schema; do
+   not infer migrations for existing tables.
+3. Run SQL Server 2022+ source capture with genuine duplicate runtime and wait
+   contributors and verify replica lineage.
+4. Design active-interval recapture/reconciliation before enabling provisional
+   capture.
+5. Add authoritative retention classifications and decouple periods from
+   physical partitions before expanding expiration automation.
+6. Benchmark CCI and COLUMNSTORE_ARCHIVE on production-shaped fact volumes.
 
-## Release sequence
-
-1. Finish repository/DACPAC and transactional integration tests.
-2. Validate the integrated branch against Voyager2 without persistence.
-3. Review known legacy periods and deployment table-shape differences.
-4. Have a DBA create the `dbo`-owned `qv_report` schema.
-5. Merge only after approval, then use the existing backup/preflight production
-   workflow.
-6. Provision the external-secret-backed Grafana login/user and prove it cannot
-   read `dbo.RunMetadata`.
-7. Load dashboards into an approved Grafana instance and export one native plan
-   to SSMS.
-
-No step requires a custom Grafana datasource, plan renderer, or an unreviewed
-internal schema redesign.
+No step requires replacing Query Store, building a web UI, rendering plans, or
+changing the existing Grafana dashboard SQL.

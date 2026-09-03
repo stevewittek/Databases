@@ -119,6 +119,18 @@ BEGIN
 				UNION ALL
 				SELECT 1 FROM dbo.query_store_wait_stats
 				WHERE $PARTITION.PF_RunID(RunID) = @PartitionNumber AND RunID <> @RunID
+				UNION ALL
+				SELECT 1 FROM dbo.query_store_runtime_stats_contributor
+				WHERE $PARTITION.PF_RunID(RunID) = @PartitionNumber AND RunID <> @RunID
+				UNION ALL
+				SELECT 1 FROM dbo.query_store_runtime_stats_canonical
+				WHERE $PARTITION.PF_RunID(RunID) = @PartitionNumber AND RunID <> @RunID
+				UNION ALL
+				SELECT 1 FROM dbo.query_store_wait_stats_contributor
+				WHERE $PARTITION.PF_RunID(RunID) = @PartitionNumber AND RunID <> @RunID
+				UNION ALL
+				SELECT 1 FROM dbo.query_store_wait_stats_canonical
+				WHERE $PARTITION.PF_RunID(RunID) = @PartitionNumber AND RunID <> @RunID
 			)
 				THROW 51005, 'Refusing to switch a physical partition that contains multiple RunID values.', 1;
 
@@ -130,7 +142,11 @@ BEGIN
 				('query_store_plan'),
 				('query_store_runtime_stats'),
 				('query_store_runtime_stats_interval'),
-				('query_store_wait_stats');
+				('query_store_wait_stats'),
+				('query_store_runtime_stats_contributor'),
+				('query_store_runtime_stats_canonical'),
+				('query_store_wait_stats_contributor'),
+				('query_store_wait_stats_canonical');
 
 			DECLARE @TableName NVARCHAR(128);
 			DECLARE table_cursor CURSOR LOCAL FAST_FORWARD FOR 
@@ -203,6 +219,18 @@ BEGIN
 				UNION ALL
 				SELECT 1 FROM dbo.query_store_wait_stats_PartitionMaintenance
 				WHERE $PARTITION.PF_RunID(RunID) = @PartitionNumber AND RunID <> @RunID
+				UNION ALL
+				SELECT 1 FROM dbo.query_store_runtime_stats_contributor_PartitionMaintenance
+				WHERE $PARTITION.PF_RunID(RunID) = @PartitionNumber AND RunID <> @RunID
+				UNION ALL
+				SELECT 1 FROM dbo.query_store_runtime_stats_canonical_PartitionMaintenance
+				WHERE $PARTITION.PF_RunID(RunID) = @PartitionNumber AND RunID <> @RunID
+				UNION ALL
+				SELECT 1 FROM dbo.query_store_wait_stats_contributor_PartitionMaintenance
+				WHERE $PARTITION.PF_RunID(RunID) = @PartitionNumber AND RunID <> @RunID
+				UNION ALL
+				SELECT 1 FROM dbo.query_store_wait_stats_canonical_PartitionMaintenance
+				WHERE $PARTITION.PF_RunID(RunID) = @PartitionNumber AND RunID <> @RunID
 			)
 				THROW 51006, 'Refusing to truncate a physical partition that contains multiple RunID values.', 1;
 
@@ -214,7 +242,11 @@ BEGIN
 				('query_store_plan_PartitionMaintenance'),
 				('query_store_runtime_stats_PartitionMaintenance'),
 				('query_store_runtime_stats_interval_PartitionMaintenance'),
-				('query_store_wait_stats_PartitionMaintenance');
+				('query_store_wait_stats_PartitionMaintenance'),
+				('query_store_runtime_stats_contributor_PartitionMaintenance'),
+				('query_store_runtime_stats_canonical_PartitionMaintenance'),
+				('query_store_wait_stats_contributor_PartitionMaintenance'),
+				('query_store_wait_stats_canonical_PartitionMaintenance');
 
 			DECLARE maint_cursor CURSOR LOCAL FAST_FORWARD FOR 
 				SELECT TableName FROM @MaintenanceTables;

@@ -1,18 +1,41 @@
 CREATE VIEW qv_report.query_period_metrics
 AS
-	WITH runtime_aggregate AS
+	WITH runtime_observation AS
+	(
+		SELECT
+			RunID, plan_id, count_executions, avg_cpu_time, avg_duration,
+			avg_logical_io_reads, first_execution_time, last_execution_time
+		FROM dbo.query_store_runtime_stats_canonical
+
+		UNION ALL
+
+		SELECT
+			legacy.RunID, legacy.plan_id,
+			CONVERT(DECIMAL(38,0), legacy.count_executions),
+			legacy.avg_cpu_time, legacy.avg_duration,
+			legacy.avg_logical_io_reads,
+			legacy.first_execution_time, legacy.last_execution_time
+		FROM dbo.query_store_runtime_stats AS legacy
+		WHERE NOT EXISTS
+		(
+			SELECT 1
+			FROM dbo.query_store_runtime_stats_canonical AS canonical
+			WHERE canonical.RunID = legacy.RunID
+		)
+	),
+	runtime_aggregate AS
 	(
 		SELECT
 			rs.RunID AS period_id,
 			p.query_id,
-			SUM(CONVERT(BIGINT, rs.count_executions)) AS execution_count,
+			SUM(CONVERT(DECIMAL(38,0), rs.count_executions)) AS execution_count,
 			SUM(CONVERT(DECIMAL(38, 4), rs.avg_cpu_time) * rs.count_executions) / 1000.0 AS total_cpu_ms,
 			SUM(CONVERT(DECIMAL(38, 4), rs.avg_duration) * rs.count_executions) / 1000.0 AS total_duration_ms,
 			SUM(CONVERT(DECIMAL(38, 4), rs.avg_logical_io_reads) * rs.count_executions) AS total_logical_reads,
 			MIN(rs.first_execution_time) AS first_execution_time,
 			MAX(rs.last_execution_time) AS last_execution_time,
 			CONVERT(BIGINT, COUNT(DISTINCT p.plan_id)) AS plan_count
-		FROM dbo.query_store_runtime_stats AS rs
+		FROM runtime_observation AS rs
 		INNER JOIN dbo.query_store_plan AS p
 			ON p.RunID = rs.RunID
 			AND p.plan_id = rs.plan_id

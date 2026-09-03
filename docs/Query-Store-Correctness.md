@@ -1,105 +1,104 @@
 # Query Store Capture Correctness
 
-## Microsoft-documented grains
+Status date: 2026-09-03.
 
-An active Query Store interval can expose separate persisted and in-memory
-runtime rows for the same `(plan_id, execution_type,
-runtime_stats_interval_id)`. Consumers must aggregate at that grain;
-`runtime_stats_id` alone is not a complete interval observation. Wait data has
-the corresponding grain plus `wait_category`.
+## Documented source grains
+
+Microsoft documents that an active interval can expose more than one
+sys.query_store_runtime_stats row because persisted and in-memory values are
+separate. A complete runtime observation is:
+
+(plan_id, execution_type, runtime_stats_interval_id)
+
+The documented wait grain is:
+
+(plan_id, runtime_stats_interval_id, execution_type, wait_category)
+
+Native runtime_stats_id and wait_stats_id values identify source rows; they are
+not canonical observation keys and can repeat among legitimate contributors.
+SQL Server 2022 and later also expose replica_group_id. Replica is contributor
+lineage, not part of either canonical grain.
 
 References:
 
 - [sys.query_store_runtime_stats](https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-query-store-runtime-stats-transact-sql?view=sql-server-ver17)
 - [sys.query_store_wait_stats](https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-query-store-wait-stats-transact-sql?view=sql-server-ver17)
 
-## Integrated capture behavior
+## Capture and materialization
 
-`dbo.usp_ArchiveQueryStore` applies two layers of protection:
+dbo.usp_ArchiveQueryStore now preserves every selected native row in lossless
+contributor tables, then calls dbo.usp_MaterializeCanonicalQueryStoreStats.
+Duplicate source IDs or multiple rows at a documented grain are retained and
+aggregated; they are no longer rejected or discarded.
 
-1. it reads `flush_interval_seconds`, caps the requested end at current UTC
-   minus one flush interval, and selects only intervals ending by that effective
-   end; and
-2. after copying runtime or wait rows inside the archive transaction, it rejects
-   any repeated documented-grain group and rolls back the archive data before
-   the run can be marked complete.
+Runtime materialization:
 
-The guard prevents a newly detected duplicate from becoming an apparently valid
-completed period. It does not aggregate the observations and therefore does not
-satisfy the complete hard requirement.
+- sums count_executions into DECIMAL(38,0);
+- computes each mean with count_executions as its weight;
+- takes the minimum of minima and maximum of maxima;
+- takes the earliest first_execution_time and latest last_execution_time;
+- takes last-value metrics from the sole contributor at the latest execution
+  time; a latest-time tie sets those values to NULL and records
+  last_value_ambiguous = 1;
+- preserves native standard deviation only for a single contributor; multiple
+  contributors use NULL and UNAVAILABLE_MULTIPLE_CONTRIBUTORS, because
+  Microsoft does not document whether Query Store's value is sample or
+  population standard deviation; and
+- keeps one replica ID only when all contributors have the same lineage.
+  Otherwise the canonical replica is NULL, replica_count records the
+  multiplicity, and the contributor rows retain every value.
 
-Status:
+Wait materialization:
 
-- completed-interval preference: **IMPLEMENTED**;
-- duplicate-grain rejection: **IMPLEMENTED**;
-- canonical runtime aggregation: **PARTIAL / not implemented**;
-- canonical wait aggregation: **PARTIAL / not implemented**;
-- provisional active-interval reconciliation: **MISSING**.
+- sums total_query_wait_time_ms into DECIMAL(38,0);
+- calculates avg_query_wait_time_ms as canonical total wait divided by the
+  matching canonical runtime execution count;
+- combines minima and maxima;
+- preserves last and standard deviation only for a single contributor;
+- marks multi-contributor last values ambiguous because the wait catalog view
+  exposes no execution timestamp with which to order contributors; and
+- applies the same replica-lineage rule as runtime materialization.
 
-## Why rejection is not aggregation
+Canonical primary keys enforce one row per RunID and documented grain.
+Contributors keep independent surrogate IDs, so native IDs are never
+misrepresented as unique archive observations.
 
-Runtime aggregation must sum `count_executions`, compute execution-weighted
-means, preserve extrema, select chronological last values, and combine standard
-deviation correctly. Wait aggregation must preserve additive wait totals and
-define average, extrema, last, and dispersion semantics in relation to the
-matching execution population.
+## Completed and provisional intervals
 
-Using `DISTINCT`, choosing an arbitrary source ID, or keeping only the newest
-row would discard measurements. The existing target rows also expose one native
-`runtime_stats_id`/`wait_stats_id` and one `replica_group_id`; relabeling one as
-a canonical multi-row aggregate would lose lineage and misstate its meaning.
+Normal capture remains completed-interval-only. It reads
+flush_interval_seconds, caps the requested end at current UTC minus one flush
+interval, and requires interval.end_time <= effective end.
 
-The smallest correct design is documented in
-[Target and Gap Analysis](TARGET_GAP_ANALYSIS.md). It requires consistent source
-staging, reviewed combination formulas, contributor lineage, and reconciliation.
-It is not implemented here because this integration is not authorized to
-redesign internal storage.
+Canonical tables and the materializer support explicit COMPLETED and
+PROVISIONAL states. Deterministic tests prove a run can be rematerialized from
+the same contributor set as provisional. Capture of active intervals and an
+automated close/reconcile workflow are not yet implemented; no current capture
+silently labels an active interval complete.
 
-## Reporting behavior
+## Reporting and legacy periods
 
-`qv_report` aggregates archived measurements for dashboards; it does not repair,
-deduplicate, or conceal invalid archive rows. That boundary is intentional:
-reporting must not invent data-correction policy. A completed period produced by
-the integrated guarded capture cannot contain repeated documented grains, but
-legacy data can.
+qv_report uses canonical facts for a run when present. It falls back to the
+legacy runtime/wait tables only for runs with no canonical rows, preserving
+backward compatibility without mixing both representations. Legacy fallback is
+labelled LEGACY_UNVERIFIED through qv_report.periods.
 
-## Validation evidence
-
-Voyager1's SQL Server 2019 audit found 884 archived runtime rows with two
-duplicate logical groups from the older deployed capture procedure. It found no
-duplicate wait groups among only six wait rows. These results prove the runtime
-risk and do not establish wait correctness.
-
-Voyager2's current archive contained 2,366 runtime and 391 wait rows with zero
-duplicate documented-grain groups and zero interval orphans. Nine early
-Voyager2 periods—RunIDs 1, 2, 5, 6, 7, 8, 9, 14, and 15—contain intervals whose
-end exceeds the period's recorded end. They predate the cutoff safeguard and can
-be partial even without duplicate rows.
-
-Safe handling:
-
-1. exclude known legacy/partial periods from baseline decisions;
-2. re-archive retained source windows with the guarded procedure where possible;
-3. preserve originals until replacements reconcile; and
-4. purge only through normal reviewed retention handling.
+Legacy rows are not rewritten. The local SQL 2019 archive contains repeated
+runtime grains in RunIDs 8 and 12, so those periods are not authoritative
+baselines until independently reconciled or recaptured.
 
 ## Regression coverage
 
-- `TestQueryStoreAggregationGrain.sql` checks cutoff/predicate presence,
-  duplicate target groups, interval orphans, and reports historical boundary
-  violations.
-- `TestProcedureCompilation.sql` compiles the hardened core procedures inside a
-  rolled-back transaction.
-- `TestRepositoryContracts.ps1` verifies that rejection guards and declarative
-  model sources remain synchronized.
+TestCanonicalQueryStoreAggregation.sql supplies deterministic rows covering
+lossless duplicate IDs, grain isolation by plan/interval/execution/category,
+execution-weighted runtime means, additive wait totals, wait denominators,
+extrema, chronological last values, tied last timestamps, standard-deviation
+status, replica lineage, canonical uniqueness, and provisional
+rematerialization.
 
-```mermaid
-flowchart TD
-    R[Requested end] --> C[Cap at now minus flush interval]
-    C --> I[Select intervals ending by effective end]
-    I --> COPY[Copy source runtime and waits transactionally]
-    COPY --> D{Repeated documented grain?}
-    D -->|yes| FAIL[Roll back facts and mark run Failed]
-    D -->|no| DONE[Mark archive run Completed]
-    FAIL --> FUT[Future canonical staging and aggregation design]
-```
+TestQueryStoreAggregationGrain.sql verifies completed-interval predicates,
+contributor capture, both materialized grains, canonical uniqueness, interval
+references, and legacy duplicate reporting. TestReportingCanonicalRegression
+verifies canonical-first reporting and legacy fallback inside a transaction.
+
+Source rows -> contributor tables -> canonical runtime/wait facts -> qv_report.
+Legacy facts enter qv_report only for runs that have no canonical facts.

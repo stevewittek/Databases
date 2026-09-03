@@ -8,6 +8,7 @@ AS
 		pr.period_start_utc,
 		pr.period_end_utc,
 		pr.period_status,
+		pr.observation_state,
 		pr.period_classification,
 		COALESCE(SUM(qm.execution_count), 0) AS execution_count,
 		COALESCE(SUM(qm.total_cpu_ms), 0) AS total_cpu_ms,
@@ -26,5 +27,6 @@ AS
 		pr.period_start_utc,
 		pr.period_end_utc,
 		pr.period_status,
+		pr.observation_state,
 		pr.period_classification;
 GO

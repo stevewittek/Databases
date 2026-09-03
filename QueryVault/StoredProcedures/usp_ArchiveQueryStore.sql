@@ -32,6 +32,10 @@ BEGIN
 	DECLARE @RowCount BIGINT;
 	DECLARE @CompressionDelay INT;
 	DECLARE @PartitionsToAdd INT;
+	DECLARE @RuntimeContributorRows BIGINT;
+	DECLARE @WaitContributorRows BIGINT;
+	DECLARE @RuntimeReplicaGroupProjection NVARCHAR(128);
+	DECLARE @WaitReplicaGroupProjection NVARCHAR(128);
 
 	BEGIN TRY
 		-- Get configuration for the database
@@ -79,6 +83,19 @@ BEGIN
 
 		IF @ActualEndDateTime < @ActualStartDateTime
 			THROW 51003, 'The requested archive range does not contain a safely flushed Query Store interval.', 1;
+
+		-- replica_group_id is available in SQL Server 2022 and later. It is
+		-- contributor provenance, not part of Microsoft's canonical grain.
+		SET @RuntimeReplicaGroupProjection = CASE
+			WHEN TRY_CONVERT(INT, SERVERPROPERTY('ProductMajorVersion')) >= 16
+				THEN N'rs.replica_group_id'
+			ELSE N'CONVERT(BIGINT, NULL)'
+		END;
+		SET @WaitReplicaGroupProjection = CASE
+			WHEN TRY_CONVERT(INT, SERVERPROPERTY('ProductMajorVersion')) >= 16
+				THEN N'ws.replica_group_id'
+			ELSE N'CONVERT(BIGINT, NULL)'
+		END;
 
 		PRINT 'Archiving QueryStore data from ' + @SourceDatabaseName;
 		PRINT 'Date Range: ' + CONVERT(VARCHAR(30), @ActualStartDateTime, 121) + ' to ' + CONVERT(VARCHAR(30), @ActualEndDateTime, 121);
@@ -293,10 +310,11 @@ BEGIN
 		SET RowsArchived_Plan = @RowCount
 		WHERE RunID = @RunID;
 
-		-- Archive query_store_runtime_stats
-		PRINT 'Archiving query_store_runtime_stats...';
+		-- Preserve every native runtime contributor before materializing one
+		-- observation at the documented Query Store grain.
+		PRINT 'Archiving query_store_runtime_stats contributors...';
 		SET @SQL = N'
-		INSERT INTO dbo.query_store_runtime_stats
+		INSERT INTO dbo.query_store_runtime_stats_contributor
 		(RunID, runtime_stats_id, plan_id, runtime_stats_interval_id, execution_type, execution_type_desc,
 		 first_execution_time, last_execution_time, count_executions,
 		 avg_duration, last_duration, min_duration, max_duration, stdev_duration,
@@ -330,7 +348,7 @@ BEGIN
 			rs.avg_log_bytes_used, rs.last_log_bytes_used, rs.min_log_bytes_used, rs.max_log_bytes_used, rs.stdev_log_bytes_used,
 			rs.avg_tempdb_space_used, rs.last_tempdb_space_used, rs.min_tempdb_space_used, rs.max_tempdb_space_used, rs.stdev_tempdb_space_used,
 			rs.avg_page_server_io_reads, rs.last_page_server_io_reads, rs.min_page_server_io_reads, rs.max_page_server_io_reads, rs.stdev_page_server_io_reads,
-			rs.replica_group_id
+			' + @RuntimeReplicaGroupProjection + N'
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats rs
 		INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval i
 			ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id
@@ -344,28 +362,14 @@ BEGIN
 			@StartDateTime = @ActualStartDateTime,
 			@EndDateTime = @ActualEndDateTime,
 			@RowsArchived = @RowCount OUTPUT;
-		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
+		SET @RuntimeContributorRows = @RowCount;
+		PRINT 'Archived ' + CAST(@RuntimeContributorRows AS VARCHAR(20)) + ' native runtime contributor rows';
 
-		-- Until the archive schema stores one canonical aggregate at Microsoft's
-		-- documented grain, fail closed instead of completing a misleading run.
-		IF EXISTS
-		(
-			SELECT 1
-			FROM dbo.query_store_runtime_stats
-			WHERE RunID = @RunID
-			GROUP BY plan_id, execution_type, runtime_stats_interval_id
-			HAVING COUNT_BIG(*) > 1
-		)
-			THROW 51007, 'Runtime statistics contain multiple rows at the documented Query Store grain.', 1;
-
-		UPDATE dbo.RunMetadata 
-		SET RowsArchived_RuntimeStats = @RowCount
-		WHERE RunID = @RunID;
-
-		-- Archive query_store_wait_stats
-		PRINT 'Archiving query_store_wait_stats...';
+		-- Preserve every native wait contributor. Canonical wait averages are
+		-- derived later from additive wait totals and matching runtime counts.
+		PRINT 'Archiving query_store_wait_stats contributors...';
 		SET @SQL = N'
-		INSERT INTO dbo.query_store_wait_stats
+		INSERT INTO dbo.query_store_wait_stats_contributor
 		(RunID, wait_stats_id, plan_id, runtime_stats_interval_id, wait_category, wait_category_desc,
 		 execution_type, execution_type_desc, total_query_wait_time_ms, avg_query_wait_time_ms,
 		 last_query_wait_time_ms, min_query_wait_time_ms, max_query_wait_time_ms, stdev_query_wait_time_ms,
@@ -375,7 +379,7 @@ BEGIN
 			ws.wait_stats_id, ws.plan_id, ws.runtime_stats_interval_id, ws.wait_category, ws.wait_category_desc,
 			ws.execution_type, ws.execution_type_desc, ws.total_query_wait_time_ms, ws.avg_query_wait_time_ms,
 			ws.last_query_wait_time_ms, ws.min_query_wait_time_ms, ws.max_query_wait_time_ms, ws.stdev_query_wait_time_ms,
-			ws.replica_group_id
+			' + @WaitReplicaGroupProjection + N'
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_wait_stats ws
 		INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval i
 			ON i.runtime_stats_interval_id = ws.runtime_stats_interval_id
@@ -389,19 +393,26 @@ BEGIN
 			@StartDateTime = @ActualStartDateTime,
 			@EndDateTime = @ActualEndDateTime,
 			@RowsArchived = @RowCount OUTPUT;
-		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
+		SET @WaitContributorRows = @RowCount;
+		PRINT 'Archived ' + CAST(@WaitContributorRows AS VARCHAR(20)) + ' native wait contributor rows';
 
-		IF EXISTS
-		(
-			SELECT 1
-			FROM dbo.query_store_wait_stats
-			WHERE RunID = @RunID
-			GROUP BY plan_id, runtime_stats_interval_id, execution_type, wait_category
-			HAVING COUNT_BIG(*) > 1
-		)
-			THROW 51008, 'Wait statistics contain multiple rows at the documented Query Store grain.', 1;
+		EXEC dbo.usp_MaterializeCanonicalQueryStoreStats
+			@RunID = @RunID,
+			@ObservationState = N'COMPLETED';
 
-		UPDATE dbo.RunMetadata 
+		SELECT @RowCount = COUNT_BIG(*)
+		FROM dbo.query_store_runtime_stats_canonical
+		WHERE RunID = @RunID;
+
+		UPDATE dbo.RunMetadata
+		SET RowsArchived_RuntimeStats = @RowCount
+		WHERE RunID = @RunID;
+
+		SELECT @RowCount = COUNT_BIG(*)
+		FROM dbo.query_store_wait_stats_canonical
+		WHERE RunID = @RunID;
+
+		UPDATE dbo.RunMetadata
 		SET RowsArchived_WaitStats = @RowCount
 		WHERE RunID = @RunID;
 

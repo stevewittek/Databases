@@ -6,7 +6,28 @@ GO
 
 CREATE OR ALTER VIEW qv_report.query_wait_period_metrics
 AS
-	WITH wait_aggregate AS
+	WITH wait_observation AS
+	(
+		SELECT
+			RunID, plan_id, wait_category, wait_category_desc,
+			total_query_wait_time_ms, max_query_wait_time_ms
+		FROM dbo.query_store_wait_stats_canonical
+
+		UNION ALL
+
+		SELECT
+			legacy.RunID, legacy.plan_id, legacy.wait_category, legacy.wait_category_desc,
+			CONVERT(DECIMAL(38,0), legacy.total_query_wait_time_ms),
+			legacy.max_query_wait_time_ms
+		FROM dbo.query_store_wait_stats AS legacy
+		WHERE NOT EXISTS
+		(
+			SELECT 1
+			FROM dbo.query_store_wait_stats_canonical AS canonical
+			WHERE canonical.RunID = legacy.RunID
+		)
+	),
+	wait_aggregate AS
 	(
 		SELECT
 			ws.RunID AS period_id,
@@ -15,7 +36,7 @@ AS
 			COALESCE(ws.wait_category_desc, N'Unknown') AS wait_category_desc,
 			SUM(CONVERT(DECIMAL(38, 4), ws.total_query_wait_time_ms)) AS total_wait_ms,
 			MAX(ws.max_query_wait_time_ms) AS max_query_wait_time_ms
-		FROM dbo.query_store_wait_stats AS ws
+		FROM wait_observation AS ws
 		INNER JOIN dbo.query_store_plan AS p
 			ON p.RunID = ws.RunID
 			AND p.plan_id = ws.plan_id

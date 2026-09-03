@@ -87,11 +87,18 @@ VALUES
 ('Core','U','dbo','DatabaseConfig'),('Core','U','dbo','RunMetadata'),
 ('Core','U','dbo','query_store_query'),('Core','U','dbo','query_store_query_text'),('Core','U','dbo','query_store_plan'),
 ('Core','U','dbo','query_store_runtime_stats'),('Core','U','dbo','query_store_runtime_stats_interval'),('Core','U','dbo','query_store_wait_stats'),
+('Canonical','U','dbo','query_store_runtime_stats_contributor'),('Canonical','U','dbo','query_store_runtime_stats_canonical'),
+('Canonical','U','dbo','query_store_wait_stats_contributor'),('Canonical','U','dbo','query_store_wait_stats_canonical'),
 ('Core','U','dbo','query_store_query_PartitionMaintenance'),('Core','U','dbo','query_store_query_text_PartitionMaintenance'),
 ('Core','U','dbo','query_store_plan_PartitionMaintenance'),('Core','U','dbo','query_store_runtime_stats_PartitionMaintenance'),
 ('Core','U','dbo','query_store_runtime_stats_interval_PartitionMaintenance'),('Core','U','dbo','query_store_wait_stats_PartitionMaintenance'),
+('Canonical','U','dbo','query_store_runtime_stats_contributor_PartitionMaintenance'),
+('Canonical','U','dbo','query_store_runtime_stats_canonical_PartitionMaintenance'),
+('Canonical','U','dbo','query_store_wait_stats_contributor_PartitionMaintenance'),
+('Canonical','U','dbo','query_store_wait_stats_canonical_PartitionMaintenance'),
 ('Core','P','dbo','usp_ManagePartitions'),('Core','P','dbo','usp_InitializeDatabase'),('Core','P','dbo','usp_GetArchiveSummary'),
 ('Core','P','dbo','usp_ArchiveQueryStore'),('Core','P','dbo','usp_PurgeExpiredArchives'),
+('Canonical','P','dbo','usp_MaterializeCanonicalQueryStoreStats'),
 ('Reporting','V','qv_report','periods'),('Reporting','V','qv_report','query_period_metrics'),
 ('Reporting','V','qv_report','period_metrics'),('Reporting','V','qv_report','wait_period_metrics'),
 ('Reporting','V','qv_report','query_wait_period_metrics'),('Reporting','V','qv_report','query_plans'),
@@ -99,6 +106,7 @@ VALUES
 
 SELECT
   (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Core' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingCoreObjectCount,
+  (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Canonical' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingCanonicalObjectCount,
   (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Reporting' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingReportingObjectCount,
   CASE WHEN SCHEMA_ID(N'qv_report') IS NULL THEN 0 ELSE 1 END AS ReportSchemaExists,
   CASE WHEN EXISTS (SELECT 1 FROM sys.schemas AS s WHERE s.name=N'qv_report' AND USER_NAME(s.principal_id)=N'dbo') THEN 1 ELSE 0 END AS ReportSchemaIsDboOwned,
@@ -122,7 +130,9 @@ JOIN sys.dm_db_partition_stats AS ps ON ps.object_id=i.object_id AND ps.index_id
 WHERE t.name IN
 (
  N'DatabaseConfig',N'RunMetadata',N'query_store_query',N'query_store_query_text',N'query_store_plan',
- N'query_store_runtime_stats',N'query_store_runtime_stats_interval',N'query_store_wait_stats'
+ N'query_store_runtime_stats',N'query_store_runtime_stats_interval',N'query_store_wait_stats',
+ N'query_store_runtime_stats_contributor',N'query_store_runtime_stats_canonical',
+ N'query_store_wait_stats_contributor',N'query_store_wait_stats_canonical'
 )
 GROUP BY t.name
 ORDER BY t.name;
@@ -180,6 +190,7 @@ ORDER BY j.name,s.name;
 		DatabaseName = $DatabaseName
 		DatabaseState = [string]$dbState.StateDescription
 		MissingCoreObjectCount = [int]$objects.MissingCoreObjectCount
+		MissingCanonicalObjectCount = [int]$objects.MissingCanonicalObjectCount
 		MissingReportingObjectCount = [int]$objects.MissingReportingObjectCount
 		ReportSchemaExists = [bool]$objects.ReportSchemaExists
 		ReportSchemaIsDboOwned = [bool]$objects.ReportSchemaIsDboOwned
@@ -206,6 +217,7 @@ BEGIN TRY
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_InitializeDatabase';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_GetArchiveSummary';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_ArchiveQueryStore';
+  EXEC sys.sp_refreshsqlmodule N'dbo.usp_MaterializeCanonicalQueryStoreStats';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_PurgeExpiredArchives';
   EXEC sys.sp_refreshview N'qv_report.periods';
   EXEC sys.sp_refreshview N'qv_report.query_period_metrics';
@@ -281,6 +293,7 @@ if ($Mode -eq "Pre") {
 }
 
 Assert-Condition (Test-Path -LiteralPath $BaselinePath -PathType Leaf) "Baseline file not found: $BaselinePath"
+Assert-Condition ($snapshot.MissingCanonicalObjectCount -eq 0) "One or more canonical aggregation objects are missing."
 Assert-Condition ($snapshot.MissingReportingObjectCount -eq 0) "One or more required qv_report objects are missing."
 $baseline = Get-Content -LiteralPath $BaselinePath -Raw | ConvertFrom-Json
 Assert-Condition ($baseline.DatabaseName -eq $snapshot.DatabaseName) "Baseline database does not match the target database."

@@ -1,182 +1,176 @@
 # QueryVault Current State
 
-Status date: 2026-09-03. This is the consolidated Voyager1 safety and Mac
-Grafana/reporting record.
+Status date: 2026-09-03. Branch:
+codex/queryvault-canonical-aggregation, based exactly on integration commit
+e3a536d0ae90d326d0c8968a5964f1bcb7053c77.
 
-## Implementation status
+## Current architecture
 
-QueryVault is a local-instance SQL Server Query Store archive. The repository
-currently implements:
+QueryVault is a same-instance SQL Server archive for selected Query Store
+periods. It is not a Query Store replacement and does not provide live
+monitoring. One archive execution creates a RunMetadata period, copies selected
+completed Query Store intervals and metadata, preserves native statistic rows
+as contributors, and materializes complete observations. Internal dbo storage
+is exposed to consumers only through qv_report.
 
-- configuration and run metadata;
-- partitioned archive and maintenance tables for query text, queries, plans,
-  intervals, runtime statistics, and waits;
-- guarded archive, partition, purge, initialization, and summary procedures;
-- a stable read-only `qv_report` API;
-- four Grafana OSS dashboards using the native Microsoft SQL Server datasource;
-- production-safe PowerShell deployment with backup and pre/post checks; and
-- transactional SQL and repository synchronization tests.
+The current implementation has three storage layers:
 
-The archive schema has not been redesigned. `RunID` remains both capture-period
-identity and physical partition key. Reporting consumers must use `qv_report`,
-not physical `dbo` tables.
+1. period/configuration metadata in DatabaseConfig and RunMetadata;
+2. Query Store metadata, lossless statistic contributors, and canonical facts
+   in partitioned dbo tables; and
+3. the stable qv_report views and native Showplan retrieval procedure.
 
-## Architecture and source scope
+Logical periods and physical storage are not yet separated: RunID is both the
+period identity and partitioning key.
 
-`dbo.DatabaseConfig` registers enabled databases on the current SQL Server.
-`dbo.usp_ArchiveQueryStore` uses three-part names and `@@SERVERNAME`, so remote
-SQL Server capture is not implemented even though server name is stored.
+## Current schema
 
-One archive execution creates a `RunMetadata` row and copies six Query Store
-surfaces under its `RunID`. It records the effective UTC window, completion
-state, protection/retention metadata, and per-entity row counts. Query text and
-plans are repeated per run; there is no cross-period immutable-object
-deduplication or durable identity beyond source-native IDs.
+Metadata and legacy archive tables:
 
-## Capture correctness
+- DatabaseConfig and RunMetadata;
+- query_store_query_text, query_store_query, query_store_plan;
+- query_store_runtime_stats_interval;
+- legacy query_store_runtime_stats and query_store_wait_stats.
 
-The integrated procedure:
+Canonical aggregation adds:
 
-- reads source `flush_interval_seconds`;
-- caps the requested end at current UTC minus one flush interval;
-- selects intervals using `end_time > start` and `end_time <= effective end`;
-- keeps failed-run metadata outside the archive transaction;
-- schema-qualifies dynamic execution as `sys.sp_executesql`;
-- grows partition boundaries far enough to cover a `RunID` identity jump; and
-- rejects runtime or wait data containing more than one row at the documented
-  grain before the run can complete.
+- query_store_runtime_stats_contributor;
+- query_store_runtime_stats_canonical;
+- query_store_wait_stats_contributor; and
+- query_store_wait_stats_canonical.
 
-Runtime grain is `(plan_id, execution_type, runtime_stats_interval_id)`. Wait
-grain is `(plan_id, runtime_stats_interval_id, execution_type, wait_category)`.
+All ten Query Store archive tables have aligned PartitionMaintenance tables.
+They are partitioned by RunID using PF_RunID/PS_RunID and use clustered
+columnstore with aligned nonclustered keys. Canonical facts have natural
+primary keys at the documented Query Store grains. Contributor tables use an
+archive surrogate ID and retain native row IDs and SQL Server 2022+
+replica_group_id lineage.
 
-Status: **PARTIAL** against the hard aggregation requirement. Duplicate-grain
-rejection is a safe fail-closed guard; it does not aggregate multiple source
-observations. Current completed-interval capture substantially reduces exposure,
-but it is not equivalent to a canonical aggregate and there is no provisional
-active-interval reconciliation path. See
-[Query Store correctness](Query-Store-Correctness.md).
+## Existing capture logic
 
-Reporting intentionally sums stored facts and does not hide invalid archive
-rows. Consequently, legacy duplicate rows must be quarantined or repaired
-before those periods are used for workload comparison.
+dbo.usp_ArchiveQueryStore:
 
-## Partition and retention safety
+- accepts a local source database and requested window;
+- reads flush_interval_seconds and caps the end at current UTC minus one flush
+  interval;
+- selects intervals with end_time greater than the start and less than or
+  equal to the effective end;
+- copies query text, query, plan, and interval metadata;
+- copies every selected native runtime and wait row into contributor tables;
+- projects replica_group_id on SQL Server 2022+ and NULL on older versions;
+- materializes runtime by (plan_id, execution_type,
+  runtime_stats_interval_id);
+- materializes waits by (plan_id, runtime_stats_interval_id, execution_type,
+  wait_category);
+- records canonical fact counts and marks the period completed in one archive
+  transaction; and
+- preserves failed-run metadata if the archive transaction rolls back.
 
-All six archive and maintenance tables remain partitioned by `RunID` and have
-clustered columnstore indexes plus aligned nonclustered primary keys. The
-integrated safety logic:
+Runtime counts and totals are additive, means are execution-weighted, extrema
+are combined, and chronological last values are selected only when unambiguous.
+Wait totals are additive and average wait is total wait divided by matching
+canonical executions. Unsupported multi-contributor dispersion and ambiguous
+last values are explicitly NULL with status fields. No source contributor is
+discarded.
 
-- calculates partition growth from the identity gap, with ten boundaries as the
-  minimum increment;
-- rejects `SwitchOut` when any archive table's physical partition contains a
-  different `RunID`;
-- applies the equivalent rejection before maintenance-partition truncation; and
-- owns, commits, or rolls back a direct switch/truncate transaction only when no
-  caller transaction exists.
+Normal capture does not archive active intervals. The canonical schema supports
+PROVISIONAL state and deterministic rematerialization, but active capture and
+automatic close/reconcile orchestration are incomplete.
 
-`DoNotDelete = 1` protects a run. Other completed runs can be purge candidates
-after `RetentionDate` only when the matching configuration enables automatic
-deletion. Purge supports dry-run preview and processes each run transactionally.
+## Existing retention logic
 
-Status: useful and safer, but the one-run/one-partition model, concurrent
-partition extension, legacy switch constraints, and explicit retention classes
-remain future design work.
+DoNotDelete protects a period. Otherwise a completed period with an expired
+RetentionDate is eligible only when its matching DatabaseConfig row enables
+automatic deletion. Purge offers dry-run preview, rechecks eligibility under
+locking, then switches and truncates aligned partitions.
 
-## Reporting contract
+Partition extension covers RunID identity jumps. Switch and truncate reject a
+physical partition containing another RunID, and direct maintenance operations
+only commit or roll back transactions they own.
 
-The repository implements:
+Rolling, Baseline, Incident, and Pinned are not authoritative stored
+classifications. The current DoNotDelete flag can protect data but is not a
+substitute for the approved classification model.
 
-| Object | Grain / purpose |
+## Current Query Store correctness
+
+Canonical runtime aggregation is implemented for new captures. Canonical wait
+aggregation is implemented using the documented wait grain and per-execution
+average semantics. Native row IDs are contributor attributes, not canonical
+keys. Replica groups remain lineage and do not split the canonical grain.
+
+Completed-interval preference is implemented. Provisional state exists at the
+fact/materializer layer, but active capture and later reconciliation are not
+implemented.
+
+Legacy facts remain unchanged. qv_report prefers canonical rows for a run and
+uses legacy rows only when that run has no canonical representation. The local
+SQL 2019 archive contains duplicate legacy runtime groups in RunIDs 8 and 12;
+those periods require recapture or independent reconciliation before baseline
+use.
+
+## Reporting objects
+
+The stable public interface is:
+
+| Object | Purpose |
 | --- | --- |
-| `qv_report.periods` | One row per archive run/period |
-| `qv_report.period_metrics` | Workload totals per period |
-| `qv_report.query_period_metrics` | Workload totals per period/query |
-| `qv_report.wait_period_metrics` | Wait totals per period/category |
-| `qv_report.query_wait_period_metrics` | Wait totals per period/query/category |
-| `qv_report.query_plans` | Plan inventory with native Showplan XML |
-| `qv_report.usp_GetShowplanXml` | Native XML retrieval by period/query/plan |
+| qv_report.periods | Archived periods, classification placeholder, observation state |
+| qv_report.period_metrics | Workload summary per period |
+| qv_report.query_period_metrics | Top-query and query-performance metrics |
+| qv_report.wait_period_metrics | Wait summary per period/category |
+| qv_report.query_wait_period_metrics | Waits per period/query/category |
+| qv_report.query_plans | Plan history and native Showplan XML |
+| qv_report.usp_GetShowplanXml | Native Showplan retrieval |
 
-Period classification is not stored. The contract returns nullable
-`period_classification`, and dashboards display `Unclassified (not recorded)`.
-It is not inferred from free text.
+The existing four Grafana dashboards continue to query only these objects.
+Their JSON and SQL were not modified by canonical aggregation. SSMS, Power BI,
+scripts, and future clients should use the same interface.
 
-`dbo.usp_GetArchiveSummary` remains an administrative compatibility interface;
-it is not superseded or used by Grafana.
+## Python components
 
-## Grafana package and security
+There are no Python source files, Python package manifests, or Python runtime
+components in the repository. Deployment and validation automation is
+PowerShell, SQLCMD/T-SQL, and SSDT/MSBuild.
 
-The four dashboards are QueryVault Overview, Period Comparison, Wait Analysis,
-and Query Detail. Every variable and panel query uses `qv_report`. Plans are
-listed as metadata; QueryVault does not render them. Native Showplan XML can be
-exported as `.sqlplan` and opened in SSMS.
+## Incomplete features
 
-`qv_report` must be owned by `dbo` so ownership chaining can protect internal
-tables. A dedicated `queryvault_grafana` user receives schema-level `SELECT` and
-execution of the Showplan procedure only. Passwords are supplied through the
-Grafana environment or an approved secret manager and are not stored in Git.
+- controlled Rolling/Baseline/Incident/Pinned classifications;
+- separation of logical periods from physical partitions;
+- active-interval capture and close/reconcile scheduling;
+- a consistent multi-view source snapshot during capture;
+- cross-period query text and Showplan deduplication;
+- Query Store context-settings and options snapshots;
+- full server/database environment and configuration snapshots;
+- evaluated COLUMNSTORE_ARCHIVE transitions for cold preserved partitions;
+- remote SQL Server capture and a formal source identity;
+- overlap/idempotency policy for archive windows; and
+- live least-privilege Grafana and Voyager2 acceptance after an approved
+  deployment.
 
-## Repository and DACPAC authority
+## Potential data-loss or correctness problems
 
-Operational, repeat-deployable procedures remain under
-`QueryVault/StoredProcedures`; idempotent partition wrappers remain under
-`QueryVault/Partitions`. Declarative SSDT equivalents live in the respective
-`DatabaseProject` subdirectories. Reporting views and the Showplan procedure
-follow the same operational/declarative split.
+- legacy runtime facts can contain multiple native rows at one logical grain;
+- old periods can extend beyond their recorded end and may be partial;
+- several source catalog views are read in separate statements, so Query Store
+  cleanup or change during capture can produce an inconsistent snapshot;
+- current partition design couples retention granularity to RunID and refuses
+  unsafe shared-partition operations rather than eliminating that layout risk;
+- multi-contributor standard deviation cannot be reconstructed exactly without
+  a documented native variance convention, so it is intentionally unavailable;
+- active intervals are not archived, avoiding mislabelling but leaving no
+  provisional incident workflow; and
+- SQL Server version-dependent metadata beyond replica_group_id still needs a
+  formal compatibility adapter and live SQL Server 2022+ validation.
 
-Both SQL project manifests build declarative tables, partitions, core
-procedures, the `qv_report` schema, reporting views, and reporting procedure.
-They reference the SQL Server 2019 `master.dacpac`. Repository tests enforce
-that model procedure/view bodies remain synchronized with deployment sources.
+## Reusable functionality
 
-The repository still contains zero-byte legacy files at the QueryVault root.
-They are not canonical implementations or build inputs.
+Reusable components include the completed-interval selector, additive
+contributor/canonical schema, canonical materializer, version-aware replica
+projection, partition safety guards, dry-run retention path, native Query Store
+metadata capture, qv_report boundary, Grafana package, native Showplan
+workflow, SSDT model, deployment pre/post checks, and deterministic
+transactional tests.
 
-## Environment evidence
-
-### Voyager1 audit environment
-
-- SQL Server 2019 Developer, compatibility 150.
-- Older deployed capture produced 884 runtime rows with two duplicate logical
-  grains; the guarded repository procedure was not deployed.
-- Six wait rows showed no duplicate wait grain, which is too small to establish
-  correctness.
-- Legacy maintenance constraints and deployed/repository table-shape drift were
-  observed.
-- The isolated safety branch produced a zero-error, zero-warning DACPAC with
-  Visual Studio Community 2026 SSDT.
-
-### Voyager2 production-shaped environment
-
-- `QueryVaultDB` online at compatibility 170.
-- 39 archive runs, 37 completed, across `NDP_Web`, `StackOverflow2013`, and
-  `WideWorldImporters`.
-- 2,366 runtime rows and 391 wait rows; no duplicate documented-grain groups or
-  interval orphans were found.
-- Nine early RunIDs—1, 2, 5, 6, 7, 8, 9, 14, 15—contain intervals ending after
-  the recorded period end and predate the completed-interval safeguard. Treat
-  them as potentially partial, not authoritative baselines.
-- Reporting SQL and all 49 dashboard queries passed inside rolled-back temporary
-  schema validation. Period 47 reconciled to direct archive totals and returned
-  native Showplan XML.
-- `qv_report` and `queryvault_grafana` are not deployed.
-- An unrelated `caplab-grafana` 13.1.0 container exists and was not changed.
-
-## Known gaps
-
-- Canonical source aggregation and provisional reconciliation are not
-  implemented.
-- Overlapping archive windows are allowed and can duplicate periods by design.
-- There is no consistent source snapshot across the multi-statement capture.
-- Retention classifications, environment/configuration snapshots, Query Store
-  context settings, and replica lineage are absent.
-- `CompressionDelayMinutes`, `MaxRowsPerBatch`, `@BatchSize`, and
-  `EnableParallelCopy` are exposed but not operationally applied.
-- Version claims and newer Query Store columns need an explicit compatibility
-  policy.
-- Live least-privilege Grafana execution and dashboard rendering remain blocked
-  until approved deployment and provisioning.
-
-See [target/gap analysis](TARGET_GAP_ANALYSIS.md) and
-[validation](VALIDATION_REPORT.md). The unchanged
-[Voyager1 safety handoff](HANDOFF_QUERYVAULT_AUDIT_SAFETY.md) remains the
-engineering record for the isolated source branch.
+No database, SQL Agent job, login, Grafana instance, or Voyager2 object was
+changed while producing this branch.

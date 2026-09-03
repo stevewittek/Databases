@@ -1,65 +1,96 @@
 # QueryVault Architecture
 
-## System boundary
+## Product boundary
 
-```mermaid
-flowchart LR
-    QS[Source SQL Server\nQuery Store] -->|completed intervals| CAP[dbo.usp_ArchiveQueryStore]
-    CAP --> INT[(QueryVault internal dbo tables)]
-    INT --> API[qv_report views and procedure]
-    API --> GF[Grafana OSS\nnative MSSQL datasource]
-    API --> SSMS[SSMS / sqlcmd]
-    API --> FUT[Future reporting clients]
-    SSMS --> PLAN[Native Showplan XML / .sqlplan]
-```
+QueryVault is a long-term archive of selected SQL Server Query Store periods.
+It does not replace Query Store, monitor live activity, render execution plans,
+or host a web UI.
 
-Only `qv_report` is a supported visualization/reporting contract. `dbo` tables
-and partition-maintenance tables are implementation details and may not be used
-by dashboards or future clients as a shortcut.
+The supported flow is:
+
+Source Query Store -> archive procedure -> internal contributor/canonical
+storage -> qv_report -> Grafana, SSMS, Power BI, or scripts.
+
+Only qv_report is a supported consumer contract. The dbo archive tables and
+PartitionMaintenance tables are implementation details.
 
 ## Capture flow
 
-```mermaid
-sequenceDiagram
-    participant Job as Operator or SQL Agent
-    participant QV as QueryVault
-    participant QS as Source Query Store
-    Job->>QV: usp_ArchiveQueryStore(source, window)
-    QV->>QS: Read flush_interval_seconds
-    QV->>QV: safe end = min(requested end, now - flush interval)
-    QV->>QS: Read intervals where end_time <= safe end
-    QV->>QS: Read queries, text, plans, runtime, waits for those intervals
-    QV->>QV: Store all entities under one RunID
-    QV->>QV: Mark period Completed and record counts
-```
+1. An operator or SQL Agent calls dbo.usp_ArchiveQueryStore for a local source
+   database and requested window.
+2. Capture reads Query Store flush_interval_seconds and sets a safe end no later
+   than current UTC minus one flush interval.
+3. It copies only intervals whose end is within the selected completed window.
+4. It archives query text, query, plan, and interval metadata.
+5. It copies every native runtime and wait row to lossless contributor tables.
+6. dbo.usp_MaterializeCanonicalQueryStoreStats rebuilds canonical rows for the
+   RunID.
+7. Capture records canonical fact counts and marks the logical period
+   Completed.
 
-The cutoff is essential: an active Query Store interval can contain separate
-persisted and in-memory rows at the same documented aggregation grain. Current
-capture also fails closed if repeated grains are observed. This prevents a bad
-completed run but does not implement canonical source aggregation; reporting is
-valid only for archive periods that pass these safeguards or are independently
-reconciled.
+All archive writes occur in the capture transaction. Failed-run metadata is
+preserved outside it.
 
-## Reporting flow and trust
+## Canonical fact model
 
-```mermaid
-flowchart TB
-    DBO[(dbo archive tables)] -->|same owner / ownership chain| REPORT[qv_report]
-    LOGIN[queryvault_grafana login] --> USER[queryvault_grafana database user]
-    USER -->|SELECT on schema| REPORT
-    USER -->|EXECUTE one procedure| XML[usp_GetShowplanXml]
-    USER -. no grant .-> DBO
-    GRAFANA[Grafana native MSSQL datasource] --> LOGIN
-```
+Runtime contributors materialize to one fact at:
 
-`qv_report` must be owned by `dbo`. The reporting reader receives schema-level
-`SELECT` and object-level `EXECUTE`, not internal table permissions. Credentials
-come from the Grafana environment or an external secret manager and are never
-stored in Git.
+(RunID, plan_id, execution_type, runtime_stats_interval_id)
+
+Wait contributors materialize to one fact at:
+
+(RunID, plan_id, runtime_stats_interval_id, execution_type, wait_category)
+
+Native statistic IDs and replica_group_id remain contributor lineage. They are
+not canonical keys. Mixed replica contributors do not split a workload
+observation.
+
+Canonical facts distinguish COMPLETED and PROVISIONAL. Current archive capture
+emits COMPLETED only. The schema can rematerialize provisional contributors,
+but source recapture after interval close and an audited state transition are
+future orchestration work.
+
+## Storage and retention
+
+RunMetadata is the logical archived period. Today RunID is also the physical
+partitioning key, so the approved long-term separation between logical periods
+and physical partitions is not yet achieved.
+
+Query Store metadata, contributor facts, canonical facts, and their aligned
+maintenance tables use PF_RunID/PS_RunID. Fact storage uses clustered
+columnstore. Partition switch/truncate supports efficient expiration when one
+physical partition contains one RunID; safety guards reject a shared
+partition.
+
+RetentionDate, AutoDeleteEnabled, and DoNotDelete control current expiration.
+Rolling, Baseline, Incident, and Pinned require a future authoritative
+classification model.
+
+## Reporting boundary
+
+qv_report.periods publishes period metadata and observation state.
+qv_report.query_period_metrics and period_metrics publish workload facts.
+qv_report.wait_period_metrics and query_wait_period_metrics publish wait facts.
+qv_report.query_plans and usp_GetShowplanXml expose native SQL Server Showplan
+XML.
+
+For a given RunID, reporting reads canonical facts if present. It reads legacy
+facts only when no canonical representation exists, preventing double counting
+while retaining compatibility with earlier archive periods.
+
+The existing Grafana dashboards query this interface only. Canonical
+aggregation required no dashboard SQL or JSON changes.
+
+## Reporting security
+
+qv_report must be owned by dbo so ownership chaining can protect internal
+tables. A reporting reader receives SELECT on the reporting schema and EXECUTE
+on the Showplan procedure, not permission on internal dbo tables. Credentials
+belong in an external secret source and are never stored in Git.
 
 ## Contract evolution
 
-V1 objects and column semantics are documented in
-[the reporting plan](GRAFANA_REPORTING_PLAN.md). Changes should be additive.
-When a dashboard needs unavailable data, change and document the contract first;
-do not hide a dependency on internal objects inside dashboard JSON.
+Reporting changes should be additive. Internal storage can evolve, including
+logical/physical partition separation, immutable-object deduplication,
+environment snapshots, and cold compression, without forcing consumers to
+query a new physical schema.

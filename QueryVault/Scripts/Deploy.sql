@@ -121,6 +121,18 @@ GO
 :r "$(ProjectDir)Tables\QueryStore\query_store_wait_stats.sql"
 GO
 
+:r "$(ProjectDir)Tables\QueryStore\query_store_runtime_stats_contributor.sql"
+GO
+
+:r "$(ProjectDir)Tables\QueryStore\query_store_runtime_stats_canonical.sql"
+GO
+
+:r "$(ProjectDir)Tables\QueryStore\query_store_wait_stats_contributor.sql"
+GO
+
+:r "$(ProjectDir)Tables\QueryStore\query_store_wait_stats_canonical.sql"
+GO
+
 -- ========================================
 -- STEP 6: Create Partition Maintenance Tables
 -- ========================================
@@ -148,6 +160,18 @@ GO
 :r "$(ProjectDir)Tables\PartitionMaintenance\query_store_wait_stats_PartitionMaintenance.sql"
 GO
 
+:r "$(ProjectDir)Tables\PartitionMaintenance\query_store_runtime_stats_contributor_PartitionMaintenance.sql"
+GO
+
+:r "$(ProjectDir)Tables\PartitionMaintenance\query_store_runtime_stats_canonical_PartitionMaintenance.sql"
+GO
+
+:r "$(ProjectDir)Tables\PartitionMaintenance\query_store_wait_stats_contributor_PartitionMaintenance.sql"
+GO
+
+:r "$(ProjectDir)Tables\PartitionMaintenance\query_store_wait_stats_canonical_PartitionMaintenance.sql"
+GO
+
 -- ========================================
 -- STEP 7: Create Stored Procedures
 -- ========================================
@@ -164,6 +188,9 @@ GO
 GO
 
 :r "$(ProjectDir)StoredProcedures\usp_GetArchiveSummary.sql"
+GO
+
+:r "$(ProjectDir)StoredProcedures\usp_MaterializeCanonicalQueryStoreStats.sql"
 GO
 
 :r "$(ProjectDir)StoredProcedures\usp_ArchiveQueryStore.sql"

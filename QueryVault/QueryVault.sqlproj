@@ -72,6 +72,7 @@
     <Folder Include="Schemas" />
     <Folder Include="Views" />
     <Folder Include="Security" />
+    <Folder Include="Tests" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitkeep" />
@@ -98,6 +99,9 @@
     <None Include="FixBuildErrors.ps1" />
     <None Include="HOW_TO_FIX_BUILD_ERRORS.md" />
     <None Include="Security\ProvisionGrafanaReader.sql" />
+    <None Include="Security\ProvisionReportingSchema.sql" />
+    <None Include="Tests\TestQueryStoreAggregationGrain.sql" />
+    <None Include="Tests\TestReportingContract.sql" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="PartitionFunction.sql" />

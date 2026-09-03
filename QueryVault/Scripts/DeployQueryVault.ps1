@@ -69,7 +69,14 @@ $deploymentSteps = @(
 	@{ Name = "usp_InitializeDatabase Procedure"; Path = "StoredProcedures/usp_InitializeDatabase.sql"; Kind = "Procedure" },
 	@{ Name = "usp_GetArchiveSummary Procedure"; Path = "StoredProcedures/usp_GetArchiveSummary.sql"; Kind = "Procedure" },
 	@{ Name = "usp_ArchiveQueryStore Procedure"; Path = "StoredProcedures/usp_ArchiveQueryStore.sql"; Kind = "Procedure" },
-	@{ Name = "usp_PurgeExpiredArchives Procedure"; Path = "StoredProcedures/usp_PurgeExpiredArchives.sql"; Kind = "Procedure" }
+	@{ Name = "usp_PurgeExpiredArchives Procedure"; Path = "StoredProcedures/usp_PurgeExpiredArchives.sql"; Kind = "Procedure" },
+	@{ Name = "qv_report.periods View"; Path = "Views/qv_report.periods.sql"; Kind = "View" },
+	@{ Name = "qv_report.query_period_metrics View"; Path = "Views/qv_report.query_period_metrics.sql"; Kind = "View" },
+	@{ Name = "qv_report.period_metrics View"; Path = "Views/qv_report.period_metrics.sql"; Kind = "View" },
+	@{ Name = "qv_report.wait_period_metrics View"; Path = "Views/qv_report.wait_period_metrics.sql"; Kind = "View" },
+	@{ Name = "qv_report.query_wait_period_metrics View"; Path = "Views/qv_report.query_wait_period_metrics.sql"; Kind = "View" },
+	@{ Name = "qv_report.query_plans View"; Path = "Views/qv_report.query_plans.sql"; Kind = "View" },
+	@{ Name = "qv_report.usp_GetShowplanXml Procedure"; Path = "StoredProcedures/qv_report.usp_GetShowplanXml.sql"; Kind = "Procedure" }
 )
 
 function New-ConnectionParameters {
@@ -139,6 +146,23 @@ try {
 	}
 	elseif ($dbState.StateDescription -ne "ONLINE") {
 		throw "Target database '$DatabaseName' is not ONLINE; current state: $($dbState.StateDescription)"
+	}
+
+	# This preflight deliberately runs before any deployment DDL. The restricted
+	# production deployer must not gain dbo impersonation merely to create the
+	# reporting boundary.
+	$reportSchema = Invoke-QueryVaultSql -Database $DatabaseName -Query @"
+SET NOCOUNT ON;
+SELECT
+  CASE WHEN SCHEMA_ID(N'qv_report') IS NULL THEN 0 ELSE 1 END AS SchemaExists,
+  CASE WHEN EXISTS
+  (
+    SELECT 1 FROM sys.schemas AS s
+    WHERE s.name=N'qv_report' AND USER_NAME(s.principal_id)=N'dbo'
+  ) THEN 1 ELSE 0 END AS IsDboOwned;
+"@ -QueryTimeout 30
+	if ([int]$reportSchema.SchemaExists -ne 1 -or [int]$reportSchema.IsDboOwned -ne 1) {
+		throw "Required dbo-owned schema 'qv_report' is missing or has the wrong owner. A DBA must first run Security/ProvisionReportingSchema.sql. No QueryVault object DDL was applied."
 	}
 
 	$deployed = [System.Collections.Generic.List[string]]::new()

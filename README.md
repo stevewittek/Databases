@@ -4,7 +4,10 @@ A SQL Server database project for preserving, organizing, and analyzing historic
 
 QueryVault copies Query Store information from one or more source databases into a centralized archive. It is designed to support longer-term performance analysis when the source database's built-in Query Store retention window is not enough. The project combines T-SQL, SQL Server Data Tools project structure, PowerShell deployment helpers, table partitioning, clustered columnstore indexes, and SQL Server Agent automation.
 
-> **Project status:** Active portfolio project. Review and test all scripts in a non-production environment before using them with business-critical databases.
+> **Project status:** Active. Core archiving and retention are implemented. The
+> version-controlled Grafana V1 package and `qv_report` API are implemented and
+> validated against a production-shaped archive, but are not yet deployed on
+> Voyager2. Review [current state](docs/CURRENT_STATE.md) before deployment.
 
 ## Why I built this
 
@@ -34,6 +37,8 @@ The project demonstrates database design and administration skills including:
 - **Automated execution** — includes SQL Server Agent job templates for individual or multiple databases.
 - **Deployment options** — supports SSDT/database-project deployment, SQLCMD, PowerShell, or ordered manual execution.
 - **Operational reporting** — includes procedures and sample queries for archive summaries, storage monitoring, and troubleshooting.
+- **Stable reporting API** — exposes supported analytics through `qv_report` without coupling clients to internal tables.
+- **Grafana OSS dashboards** — provisions the native Microsoft SQL Server datasource and four V1 dashboards; no custom plugin or plan renderer.
 
 ## Architecture
 
@@ -68,11 +73,16 @@ The archive covers these major Query Store entities:
 | `QueryVault/Partitions/` | Partition function and partition scheme definitions |
 | `QueryVault/Jobs/` | SQL Server Agent job templates |
 | `QueryVault/Scripts/` | Deployment, compatibility, and Query Store setup utilities |
+| `QueryVault/Views/` and `QueryVault/Schemas/` | Stable `qv_report` reporting contract |
+| `QueryVault/Security/` | DBA bootstrap and least-privilege Grafana user grants |
+| `QueryVault/Tests/` | Read-only correctness and reporting reconciliation checks |
+| `grafana/` | Version-controlled datasource and dashboard provisioning |
+| `docs/` | Architecture, operations, reporting, validation, and screenshot plans |
 | `QueryVault/README.md` | Full installation, usage, maintenance, and troubleshooting guide |
 
 Start with the [detailed QueryVault documentation](QueryVault/README.md) for commands and examples.
 
-For the supported Grafana OSS reporting integration, see the [reporting plan](docs/GRAFANA_REPORTING_PLAN.md) and [Grafana setup guide](docs/Grafana-Setup.md). Visualization queries use the stable `qv_report` schema rather than QueryVault's internal tables.
+For the supported Grafana OSS reporting integration, see the [reporting plan](docs/GRAFANA_REPORTING_PLAN.md) and [Grafana setup guide](docs/Grafana-Setup.md). Visualization queries use the stable `qv_report` schema rather than QueryVault's internal tables. The [architecture](docs/Architecture.md), [installation guide](docs/Installation.md), [operator guide](docs/QueryVault-Guide.md), and [validation report](docs/VALIDATION_REPORT.md) describe the complete path.
 
 ## Requirements
 
@@ -140,7 +150,7 @@ Potential future enhancements include:
 - CI validation for the SQL database project
 - More configurable filegroup placement and partition growth
 - Retention cleanup orchestration with dry-run reporting
-- Dashboard queries for archive health and historical performance trends
+- Authoritative period classification behind the existing nullable reporting column
 - Release packaging and versioned upgrade scripts
 
 ## Contributing

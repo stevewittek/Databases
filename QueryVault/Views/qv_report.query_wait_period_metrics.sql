@@ -1,6 +1,10 @@
 /* Wait totals attributable to each query in an archived period. */
 
-CREATE VIEW qv_report.query_wait_period_metrics
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+CREATE OR ALTER VIEW qv_report.query_wait_period_metrics
 AS
 	WITH wait_aggregate AS
 	(

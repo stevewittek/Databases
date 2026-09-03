@@ -1,6 +1,10 @@
 /* One row per archived Query Store period. */
 
-CREATE VIEW qv_report.periods
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+CREATE OR ALTER VIEW qv_report.periods
 AS
 	SELECT
 		rm.RunID AS period_id,

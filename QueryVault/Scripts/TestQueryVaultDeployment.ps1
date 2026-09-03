@@ -81,20 +81,27 @@ function Get-QueryVaultSnapshot {
 
 	$objectQuery = @"
 SET NOCOUNT ON;
-DECLARE @Expected TABLE (ObjectType char(2) NOT NULL, SchemaName sysname NOT NULL, ObjectName sysname NOT NULL);
-INSERT @Expected (ObjectType, SchemaName, ObjectName)
+DECLARE @Expected TABLE (ContractName varchar(10) NOT NULL, ObjectType char(2) NOT NULL, SchemaName sysname NOT NULL, ObjectName sysname NOT NULL);
+INSERT @Expected (ContractName, ObjectType, SchemaName, ObjectName)
 VALUES
-('U','dbo','DatabaseConfig'),('U','dbo','RunMetadata'),
-('U','dbo','query_store_query'),('U','dbo','query_store_query_text'),('U','dbo','query_store_plan'),
-('U','dbo','query_store_runtime_stats'),('U','dbo','query_store_runtime_stats_interval'),('U','dbo','query_store_wait_stats'),
-('U','dbo','query_store_query_PartitionMaintenance'),('U','dbo','query_store_query_text_PartitionMaintenance'),
-('U','dbo','query_store_plan_PartitionMaintenance'),('U','dbo','query_store_runtime_stats_PartitionMaintenance'),
-('U','dbo','query_store_runtime_stats_interval_PartitionMaintenance'),('U','dbo','query_store_wait_stats_PartitionMaintenance'),
-('P','dbo','usp_ManagePartitions'),('P','dbo','usp_InitializeDatabase'),('P','dbo','usp_GetArchiveSummary'),
-('P','dbo','usp_ArchiveQueryStore'),('P','dbo','usp_PurgeExpiredArchives');
+('Core','U','dbo','DatabaseConfig'),('Core','U','dbo','RunMetadata'),
+('Core','U','dbo','query_store_query'),('Core','U','dbo','query_store_query_text'),('Core','U','dbo','query_store_plan'),
+('Core','U','dbo','query_store_runtime_stats'),('Core','U','dbo','query_store_runtime_stats_interval'),('Core','U','dbo','query_store_wait_stats'),
+('Core','U','dbo','query_store_query_PartitionMaintenance'),('Core','U','dbo','query_store_query_text_PartitionMaintenance'),
+('Core','U','dbo','query_store_plan_PartitionMaintenance'),('Core','U','dbo','query_store_runtime_stats_PartitionMaintenance'),
+('Core','U','dbo','query_store_runtime_stats_interval_PartitionMaintenance'),('Core','U','dbo','query_store_wait_stats_PartitionMaintenance'),
+('Core','P','dbo','usp_ManagePartitions'),('Core','P','dbo','usp_InitializeDatabase'),('Core','P','dbo','usp_GetArchiveSummary'),
+('Core','P','dbo','usp_ArchiveQueryStore'),('Core','P','dbo','usp_PurgeExpiredArchives'),
+('Reporting','V','qv_report','periods'),('Reporting','V','qv_report','query_period_metrics'),
+('Reporting','V','qv_report','period_metrics'),('Reporting','V','qv_report','wait_period_metrics'),
+('Reporting','V','qv_report','query_wait_period_metrics'),('Reporting','V','qv_report','query_plans'),
+('Reporting','P','qv_report','usp_GetShowplanXml');
 
 SELECT
-  (SELECT COUNT(*) FROM @Expected AS e WHERE OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingObjectCount,
+  (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Core' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingCoreObjectCount,
+  (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Reporting' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingReportingObjectCount,
+  CASE WHEN SCHEMA_ID(N'qv_report') IS NULL THEN 0 ELSE 1 END AS ReportSchemaExists,
+  CASE WHEN EXISTS (SELECT 1 FROM sys.schemas AS s WHERE s.name=N'qv_report' AND USER_NAME(s.principal_id)=N'dbo') THEN 1 ELSE 0 END AS ReportSchemaIsDboOwned,
   (SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0) AS UserTableCount,
   (SELECT COUNT(*) FROM sys.procedures WHERE is_ms_shipped=0) AS ProcedureCount,
   (SELECT COUNT(*) FROM sys.partition_functions WHERE name=N'PF_RunID') AS PartitionFunctionCount,
@@ -172,7 +179,10 @@ ORDER BY j.name,s.name;
 		ServerInstance = $ServerInstance
 		DatabaseName = $DatabaseName
 		DatabaseState = [string]$dbState.StateDescription
-		MissingObjectCount = [int]$objects.MissingObjectCount
+		MissingCoreObjectCount = [int]$objects.MissingCoreObjectCount
+		MissingReportingObjectCount = [int]$objects.MissingReportingObjectCount
+		ReportSchemaExists = [bool]$objects.ReportSchemaExists
+		ReportSchemaIsDboOwned = [bool]$objects.ReportSchemaIsDboOwned
 		UserTableCount = [int]$objects.UserTableCount
 		ProcedureCount = [int]$objects.ProcedureCount
 		PartitionFunctionCount = [int]$objects.PartitionFunctionCount
@@ -197,6 +207,13 @@ BEGIN TRY
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_GetArchiveSummary';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_ArchiveQueryStore';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_PurgeExpiredArchives';
+  EXEC sys.sp_refreshview N'qv_report.periods';
+  EXEC sys.sp_refreshview N'qv_report.query_period_metrics';
+  EXEC sys.sp_refreshview N'qv_report.period_metrics';
+  EXEC sys.sp_refreshview N'qv_report.wait_period_metrics';
+  EXEC sys.sp_refreshview N'qv_report.query_wait_period_metrics';
+  EXEC sys.sp_refreshview N'qv_report.query_plans';
+  EXEC sys.sp_refreshsqlmodule N'qv_report.usp_GetShowplanXml';
   ROLLBACK TRANSACTION;
 END TRY
 BEGIN CATCH
@@ -215,6 +232,22 @@ BEGIN TRY
   SELECT TOP (1) RunID,`$PARTITION.PF_RunID(RunID) AS PartitionNumber
   FROM dbo.RunMetadata
   ORDER BY RunID DESC;
+  SELECT TOP (1) period_id,execution_count,total_cpu_ms,total_duration_ms,total_logical_reads
+  FROM qv_report.period_metrics
+  ORDER BY period_id DESC;
+  SELECT TOP (1) period_id,wait_category_desc,total_wait_ms
+  FROM qv_report.wait_period_metrics
+  ORDER BY period_id DESC,total_wait_ms DESC;
+  DECLARE @Showplan xml =
+  (
+    SELECT TOP (1) showplan_xml
+    FROM qv_report.query_plans
+    WHERE showplan_xml IS NOT NULL
+    ORDER BY period_id DESC,plan_id
+  );
+  IF @Showplan IS NOT NULL
+     AND @Showplan.exist('declare default element namespace "http://schemas.microsoft.com/sqlserver/2004/07/showplan"; /ShowPlanXML') <> 1
+    THROW 51024, 'qv_report returned XML that is not native SQL Server Showplan XML.', 1;
   ROLLBACK TRANSACTION;
 END TRY
 BEGIN CATCH
@@ -227,10 +260,12 @@ END CATCH;
 
 $snapshot = Get-QueryVaultSnapshot
 Assert-Condition ($snapshot.DatabaseState -eq "ONLINE") "Database '$DatabaseName' is not ONLINE."
-Assert-Condition ($snapshot.MissingObjectCount -eq 0) "One or more required QueryVault objects are missing."
+Assert-Condition ($snapshot.MissingCoreObjectCount -eq 0) "One or more required core QueryVault objects are missing."
 Assert-Condition ($snapshot.PartitionFunctionCount -eq 1) "PF_RunID is missing or duplicated."
 Assert-Condition ($snapshot.PartitionSchemeCount -eq 1) "PS_RunID is missing or duplicated."
 Assert-Condition ($snapshot.InvalidConfigCount -eq 0) "DatabaseConfig contains invalid retention settings."
+Assert-Condition $snapshot.ReportSchemaExists "The required qv_report schema is missing. A DBA must run Security/ProvisionReportingSchema.sql first."
+Assert-Condition $snapshot.ReportSchemaIsDboOwned "qv_report must be owned by dbo."
 
 if ($Mode -eq "Pre") {
 	$parent = Split-Path -Parent $BaselinePath
@@ -246,6 +281,7 @@ if ($Mode -eq "Pre") {
 }
 
 Assert-Condition (Test-Path -LiteralPath $BaselinePath -PathType Leaf) "Baseline file not found: $BaselinePath"
+Assert-Condition ($snapshot.MissingReportingObjectCount -eq 0) "One or more required qv_report objects are missing."
 $baseline = Get-Content -LiteralPath $BaselinePath -Raw | ConvertFrom-Json
 Assert-Condition ($baseline.DatabaseName -eq $snapshot.DatabaseName) "Baseline database does not match the target database."
 Assert-Condition ($baseline.ConfigHash -eq $snapshot.ConfigHash) "DatabaseConfig settings changed during deployment."
@@ -259,4 +295,4 @@ foreach ($row in $baseline.ArchiveRows) {
 }
 
 Test-ProcedureCompilationAndSmoke
-Write-Host "Post-deployment verification passed. Data, configuration, objects, procedures, partitions, and Agent state are intact." -ForegroundColor Green
+Write-Host "Post-deployment verification passed. Data, configuration, core and reporting objects, Showplan XML, partitions, and Agent state are intact." -ForegroundColor Green

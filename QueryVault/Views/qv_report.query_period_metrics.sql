@@ -1,6 +1,10 @@
 /* Workload metrics aggregated to one row per archived period and source query_id. */
 
-CREATE VIEW qv_report.query_period_metrics
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+CREATE OR ALTER VIEW qv_report.query_period_metrics
 AS
 	WITH runtime_aggregate AS
 	(

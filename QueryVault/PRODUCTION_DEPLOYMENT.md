@@ -72,8 +72,14 @@ The command stops on the first failure and performs:
 6. post-deployment comparison, procedure compilation, and a read-only smoke test.
 
 Existing tables and their data are preserved. The deployer refreshes the five
-stored procedures and executes only the idempotent partition scripts. It never
-runs SQL Agent job scripts or retention/purge procedures.
+core stored procedures, six `qv_report` views, and the Showplan retrieval
+procedure, and executes only the idempotent partition scripts. It never runs SQL
+Agent job scripts or retention/purge procedures.
+
+Before the sequence can run, a DBA must execute the idempotent
+`Security/ProvisionReportingSchema.sql` bootstrap once. The deployment identity
+cannot create a `dbo`-owned schema. Deployment preflights this condition before
+any DDL and stops safely when it is not met.
 
 ## Individual commands
 

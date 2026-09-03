@@ -70,6 +70,7 @@
 	<Folder Include="Schemas" />
 	<Folder Include="Views" />
 	<Folder Include="Security" />
+	<Folder Include="Tests" />
   </ItemGroup>
   <ItemGroup>
 	<!-- Documentation and Helper Files -->
@@ -92,7 +93,10 @@
 	<None Include="Scripts\Voyager2_SmokeWorkload_StackOverflow.sql" />
 	<None Include="Scripts\Voyager2_SmokeWorkload_WideWorldImporters.sql" />
 	<None Include="Tests\TestPurgeExpiredArchives.sql" />
+	<None Include="Tests\TestQueryStoreAggregationGrain.sql" />
+	<None Include="Tests\TestReportingContract.sql" />
 	<None Include="Security\ProvisionGrafanaReader.sql" />
+	<None Include="Security\ProvisionReportingSchema.sql" />
 
 	<!-- SQL Agent Job Templates (Not built, run manually after deployment) -->
 	<None Include="Jobs\CreateArchiveJob_AllDatabases.sql" />

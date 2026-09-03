@@ -1,6 +1,10 @@
 /* Workload rollup for each archived period. Units are explicit in column names. */
 
-CREATE VIEW qv_report.period_metrics
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+CREATE OR ALTER VIEW qv_report.period_metrics
 AS
 	SELECT
 		pr.period_id,

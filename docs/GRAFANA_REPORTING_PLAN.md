@@ -8,7 +8,8 @@ The stable integration boundary is the `qv_report` schema. Dashboards do not que
 
 ## Repository inspection
 
-This assessment was made before adding the reporting assets in this change.
+This assessment was made before adding the reporting assets in this change;
+the objects listed later in this document are the implemented result.
 
 ### Existing reporting objects
 
@@ -52,7 +53,11 @@ Query Store duration and CPU values are stored in microseconds; the reporting co
 1. **Period classification is not recorded.** `RunMetadata` has a run name and comments but no authoritative classification such as baseline, release, incident, or business cycle. V1 exposes a nullable `period_classification`; dashboards display `Unclassified (not recorded)`. Do not infer classification from free text.
 2. **Cross-period query identity has a lifecycle limitation.** V1 comparisons match the source-native `query_id` within the selected source server/database. Query IDs are useful while Query Store identity remains stable, but can be reassigned after Query Store cleanup/reset. `query_hash_hex` is exposed as supporting evidence, not treated as a collision-free key.
 3. **Periods may overlap or differ in duration.** V1 shows absolute workload totals and explicit deltas. Operators must compare equivalent windows when interpreting regressions. A future contract may add normalized per-hour/per-day metrics.
-4. **No deployment fixture containing real archived data exists in this repository.** Static assets can be validated here, but query execution and panel rendering require a deployed QueryVault database populated by an archive run.
+4. **No deployment fixture containing real archived data exists in this repository.** SQL compilation and result reconciliation were therefore performed transactionally against Voyager2's existing archive. No reporting object was persisted there.
+5. **Some early archived periods predate the completed-interval safeguard.** Nine
+   Voyager2 periods contain an interval ending after the period's recorded end.
+   Treat those periods as potentially partial; see
+   [Query Store correctness](Query-Store-Correctness.md).
 
 ## V1 `qv_report` contract
 
@@ -104,6 +109,8 @@ When QueryVault gains classifications, `qv_report.periods.period_classification`
 
 - Datasource UID: `queryvault-mssql`.
 - Dedicated SQL login/user: `queryvault_grafana`.
+- Required schema owner: `dbo`, created once by a DBA with
+  `QueryVault/Security/ProvisionReportingSchema.sql`.
 - Database permissions: `SELECT` on schema `qv_report` and `EXECUTE` only on `qv_report.usp_GetShowplanXml`.
 - Password source: `QV_GRAFANA_SQL_PASSWORD` in the Grafana process environment; no password is committed.
 - Version-controlled paths:
@@ -133,10 +140,26 @@ Deployment acceptance requires a populated non-production QueryVault database:
 6. reconcile one period's aggregates to the underlying archive as an administrator;
 7. retrieve one plan with `qv_report.usp_GetShowplanXml` and open it in SSMS.
 
+## Voyager2 integration status (2026-09-03)
+
+- **PASS:** the seven `qv_report` modules compile transactionally against the
+  live QueryVault schema; period/runtime/wait totals reconcile, and a returned
+  plan is native Showplan XML.
+- **PASS:** dashboard JSON/provisioning structure, variables, datasource UID,
+  and `qv_report`-only query boundary pass static validation. All 49 variable
+  and panel queries also executed successfully against temporary reporting
+  objects using real periods 44 and 47.
+- **BLOCKED:** `qv_report` is not deployed. The restricted production deployer
+  cannot create a `dbo`-owned schema; a DBA must run the one-time bootstrap.
+- **BLOCKED:** `queryvault_grafana` does not exist, so least-privilege execution
+  cannot yet be tested.
+- **NOT TESTED:** dashboards have not been loaded in a QueryVault Grafana
+  instance. Voyager2's discovered `caplab-grafana` container belongs to another
+  application and was not changed.
+
 ## Future work
 
 - Add an authoritative period-classification source behind the existing contract column.
 - Add normalized rates for unequal period durations.
 - Add interval-grain reporting views only when a within-period timeline dashboard is approved.
 - Add integration tests against a disposable SQL Server/Grafana environment with seeded archive data.
-

@@ -12,13 +12,26 @@ Grafana's Microsoft SQL Server data source is the supported integration. Do not 
 
 ## 1. Deploy the reporting contract
 
+First, a DBA must create the stable boundary with the required owner:
+
+```powershell
+sqlcmd -S "<sql-server>" -E -b -i "QueryVault/Security/ProvisionReportingSchema.sql"
+```
+
+This is a one-time, idempotent bootstrap. The production deployer deliberately
+cannot impersonate `dbo`; `DeployQueryVault.ps1` stops before any DDL if the
+schema is absent or has another owner. `dbo` ownership allows the reporting
+views to use ownership chaining while the Grafana user remains unable to read
+internal tables directly.
+
 For a full QueryVault deployment, run the repository's normal SSDT deployment or:
 
 ```powershell
 sqlcmd -S "<sql-server>" -E -b -i "QueryVault/Scripts/Deploy.sql" -v ProjectDir="QueryVault/"
 ```
 
-For an existing QueryVault database, deploy these files in order:
+For a reviewed manual deployment to an existing QueryVault database, deploy
+these files in order after the bootstrap:
 
 1. `QueryVault/Schemas/qv_report.sql`
 2. `QueryVault/Views/qv_report.periods.sql`
@@ -29,7 +42,8 @@ For an existing QueryVault database, deploy these files in order:
 7. `QueryVault/Views/qv_report.query_plans.sql`
 8. `QueryVault/StoredProcedures/qv_report.usp_GetShowplanXml.sql`
 
-The reporting objects are also included in `QueryVault.sqlproj` and `QueryVault_Fixed.sqlproj`.
+The reporting objects are also included in `QueryVault.sqlproj`,
+`QueryVault_Fixed.sqlproj`, and the production-safe PowerShell deployment path.
 
 ## 2. Create the read-only SQL principal
 
@@ -69,6 +83,9 @@ SELECT HAS_PERMS_BY_NAME(N'dbo.RunMetadata', N'OBJECT', N'SELECT') AS can_read_i
 ```
 
 Expected results are `can_read_reporting = 1` and `can_read_internal = 0`. Also review any permissions inherited from `public` in your environment.
+
+Do not grant `SELECT` on `dbo` archive tables to compensate for an incorrectly
+owned reporting schema. Correct the schema owner instead.
 
 ## 3. Configure datasource secrets
 
@@ -145,6 +162,15 @@ The Query Detail dashboard lists the period ID, query ID, and plan ID needed for
 ## Upgrade rule
 
 Dashboard SQL may use only `qv_report` objects. If a new panel requires data not present in that schema, extend and document the reporting contract first. Do not point a dashboard at internal `dbo` tables as a shortcut.
+
+## Current Voyager2 note
+
+As of 2026-09-03, Voyager2 has archived QueryVault data but does not have the
+`qv_report` schema or `queryvault_grafana` principal. It has an unrelated
+`caplab-grafana` container; this package does not claim or alter that service.
+Complete the DBA bootstrap, reviewed QueryVault deployment, reader provisioning,
+and a dedicated/mutually approved Grafana mount before following the UI test
+steps above.
 
 ## References
 

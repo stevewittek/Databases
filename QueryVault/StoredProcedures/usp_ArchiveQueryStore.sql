@@ -54,9 +54,9 @@ BEGIN
 			RETURN -1;
 		END
 
-		-- Allow one Query Store flush interval before archiving. The most recent
-		-- interval can expose separate persisted and in-memory rows with the same
-		-- runtime_stats_id and wait_stats_id.
+		-- Allow one Query Store flush interval before archiving. The active
+		-- interval can expose separate persisted and in-memory rows at the same
+		-- documented runtime/wait aggregation grain.
 		SET @SQL = N'SELECT @FlushSeconds = flush_interval_seconds
 			FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.database_query_store_options;';
 

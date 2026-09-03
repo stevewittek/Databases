@@ -3,7 +3,11 @@
 	does not interpret or render it.
 */
 
-CREATE VIEW qv_report.query_plans
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+CREATE OR ALTER VIEW qv_report.query_plans
 AS
 	SELECT
 		p.RunID AS period_id,

@@ -1,6 +1,10 @@
 /* Return native Showplan XML for SSMS viewing or external .sqlplan export. */
 
-CREATE PROCEDURE qv_report.usp_GetShowplanXml
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+CREATE OR ALTER PROCEDURE qv_report.usp_GetShowplanXml
 	@PeriodID INT,
 	@QueryID BIGINT = NULL,
 	@PlanID BIGINT = NULL

@@ -1,6 +1,10 @@
 /* Wait totals by archived period and native Query Store wait category. */
 
-CREATE VIEW qv_report.wait_period_metrics
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+CREATE OR ALTER VIEW qv_report.wait_period_metrics
 AS
 	SELECT
 		ws.RunID AS period_id,

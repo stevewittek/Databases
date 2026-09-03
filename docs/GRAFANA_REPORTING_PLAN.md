@@ -53,15 +53,16 @@ Query Store duration and CPU values are stored in microseconds; the reporting co
 1. **Period classification is not recorded.** `RunMetadata` has a run name and comments but no authoritative classification such as baseline, release, incident, or business cycle. V1 exposes a nullable `period_classification`; dashboards display `Unclassified (not recorded)`. Do not infer classification from free text.
 2. **Cross-period query identity has a lifecycle limitation.** V1 comparisons match the source-native `query_id` within the selected source server/database. Query IDs are useful while Query Store identity remains stable, but can be reassigned after Query Store cleanup/reset. `query_hash_hex` is exposed as supporting evidence, not treated as a collision-free key.
 3. **Periods may overlap or differ in duration.** V1 shows absolute workload totals and explicit deltas. Operators must compare equivalent windows when interpreting regressions. A future contract may add normalized per-hour/per-day metrics.
-4. **No deployment fixture containing real archived data exists in this repository.** SQL compilation and result reconciliation were therefore performed transactionally against Voyager2's existing archive. No reporting object was persisted there.
+4. **No deployment fixture containing real archived data exists in this repository.** Live acceptance therefore uses Voyager2's persistent archive while repository tests continue to use transactional fixtures.
 5. **Some early archived periods predate the completed-interval safeguard.** Nine
    Voyager2 periods contain an interval ending after the period's recorded end.
    Treat those periods as potentially partial; see
    [Query Store correctness](Query-Store-Correctness.md).
-6. **Reporting does not repair capture multiplicity.** The integrated capture
-   rejects repeated documented-grain observations, but canonical source
-   aggregation is not implemented. `qv_report` sums accepted archived rows and
-   deliberately does not hide legacy duplicates.
+6. **Reporting does not reinterpret legacy capture multiplicity.** New captures
+   retain every native contributor and materialize canonical runtime/wait
+   observations at documented grains. `qv_report` prefers canonical facts for
+   those runs and falls back to unchanged legacy facts only when a run has no
+   canonical data.
 
 ## V1 `qv_report` contract
 
@@ -146,20 +147,22 @@ Deployment acceptance requires a populated non-production QueryVault database:
 
 ## Voyager2 integration status (2026-09-03)
 
-- **PASS:** the seven `qv_report` modules compile transactionally against the
-  live QueryVault schema; period/runtime/wait totals reconcile, and a returned
-  plan is native Showplan XML.
-- **PASS:** dashboard JSON/provisioning structure, variables, datasource UID,
-  and `qv_report`-only query boundary pass static validation. All 49 variable
-  and panel queries also executed successfully against temporary reporting
-  objects using real periods 44 and 47.
-- **BLOCKED:** `qv_report` is not deployed. The restricted production deployer
-  cannot create a `dbo`-owned schema; a DBA must run the one-time bootstrap.
-- **BLOCKED:** `queryvault_grafana` does not exist, so least-privilege execution
-  cannot yet be tested.
-- **NOT TESTED:** dashboards have not been loaded in a QueryVault Grafana
-  instance. Voyager2's discovered `caplab-grafana` container belongs to another
-  application and was not changed.
+- **PASS:** the DBA-owned `qv_report` schema, six views, and Showplan procedure
+  are deployed and compile against persistent QueryVault data.
+- **PASS:** period 47 reconciles to 353 executions, 2,199.851 ms CPU,
+  2,481.193 ms duration, 127,463 reads, 94 queries, 94 plans, and 187 ms waits.
+- **PASS:** the least-privilege `queryvault_grafana` principal can read the
+  contract and execute the Showplan procedure but cannot read
+  `dbo.RunMetadata`.
+- **PASS:** the native MSSQL datasource and all four dashboards are live in a
+  dedicated QueryVault Grafana OSS 13.1.0 instance. All 49 variable/panel
+  queries pass, and actual dashboard screenshots are committed.
+- **PASS:** native Showplan XML was exported as a 40,411-byte `.sqlplan`.
+- **NOT TESTED:** graphical opening in SSMS; SSMS was unavailable.
+
+The unrelated `caplab-grafana` service was not changed. See
+[Voyager2 RC Validation](VOYAGER2_RC_VALIDATION.md) for the full acceptance
+matrix and lab TLS exception.
 
 ## Future work
 

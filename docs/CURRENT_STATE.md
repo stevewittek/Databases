@@ -1,9 +1,10 @@
 # QueryVault Current State
 
-Status date: 2026-09-03. Working branch:
-`codex/queryvault-run-partitioning`, created from
-`origin/codex/queryvault-canonical-aggregation` at
-`cac2e5a4391647523b4a42d8b040f260bbd2dac5`.
+Status date: 2026-09-03. Release-candidate branch:
+`codex/queryvault-v1-rc`. The requested database candidate
+`65336e2c1588351712e8bd7c8c85af0238cdbeed` is deployed on Voyager2. A
+necessary Grafana-only field-formatting fix is recorded at
+`cb06d520fa87d043495a2b50d507181e5783f929`.
 
 ## Current architecture
 
@@ -146,11 +147,17 @@ Normal capture excludes active intervals. The schema and materializer support
 not implemented. Legacy facts remain unchanged; `qv_report` prefers canonical
 facts per run and falls back to legacy only when a run has no canonical facts.
 
-The local SQL Server 2019 validation archive contains legacy duplicate runtime
-groups in RunIDs 8 and 12. It also contains RunID 1004 in the nonempty overflow
-partition above boundary 120. The new guard reports that a reviewed migration
-is required rather than attempting an unsafe columnstore split. No local data
-was moved or deleted.
+The earlier local SQL Server 2019 validation archive contains legacy duplicate
+runtime groups in RunIDs 8 and 12 and a legacy RunID 1004 in a nonempty
+overflow partition. The guard reports that a reviewed migration is required
+rather than attempting an unsafe columnstore split.
+
+Voyager2 SQL Server 17.0.4075.5 now provides live SQL Server 2022+ evidence. A
+bounded WideWorldImporters archive was retained as RunID 101: 87 runtime and
+11 wait contributors produced 87 and 11 unique canonical grains, respectively.
+Execution-weighted CPU, duration, and read totals and the additive wait total
+reconcile exactly; no contributors were discarded and no interval orphans were
+created.
 
 ## Reporting objects
 
@@ -166,10 +173,35 @@ The stable public interface remains unchanged:
 | `qv_report.query_plans` | plan history and native Showplan XML |
 | `qv_report.usp_GetShowplanXml` | native Showplan retrieval |
 
-No `qv_report` or Grafana file changed in this workstream. SSMS, Power BI,
-Grafana, scripts, and future consumers should continue using this interface.
-The storage recommendation view is an administrative `dbo` object, not a
+Voyager2 now has this contract deployed with `dbo` ownership. Its dedicated
+`queryvault_grafana` principal has schema-level reporting SELECT and Showplan
+procedure EXECUTE, but cannot select `dbo.RunMetadata`. SSMS, Power BI,
+Grafana, scripts, and future consumers must continue using this interface. The
+storage recommendation view is an administrative `dbo` object, not a
 reporting-contract replacement.
+
+## Voyager2 release-candidate state
+
+- `QueryVaultDB` is online at compatibility level 170.
+- All 39 pre-deployment archive runs and their original fact rows were
+  preserved; the bounded live validation capture is the 40th run.
+- All existing configurations carry migrated defaults of 1,000 retained runs,
+  80% partition warning, and `AUTO` storage mode.
+- `PF_RunID` has fanout 103 and maximum boundary 102. RunID 101 is isolated in
+  partition 102 and partition 103 is empty for the future.
+- All ten archive tables and ten maintenance mirrors remain aligned to
+  `PS_RunID`; maintenance tables are empty.
+- The storage advisory currently recommends ROWSTORE for both RuntimeStats and
+  WaitStats for all three sources because measured recent volumes are below
+  100,000 rows per run. No storage conversion was performed.
+- A dedicated Grafana OSS 13.1.0 instance exposes all four provisioned
+  dashboards through the native MSSQL datasource. All 49 variable/panel SQL
+  calls pass against persistent data.
+- Native Showplan XML was exported successfully. Graphical opening in SSMS is
+  not tested because SSMS was unavailable.
+
+See [Voyager2 RC Validation](VOYAGER2_RC_VALIDATION.md) for exact evidence and
+the acceptance matrix.
 
 ## Python components
 
@@ -205,8 +237,8 @@ Automation uses PowerShell, SQLCMD/T-SQL, and SSDT/MSBuild.
   recovery path;
 - active intervals are excluded, so there is no provisional incident capture
   workflow yet; and
-- version-dependent metadata beyond replica lineage needs a formal adapter and
-  live SQL Server 2022+ validation.
+- version-dependent metadata beyond the now-live-validated replica lineage
+  still needs a formal adapter as new Query Store fields are adopted.
 
 ## Reusable functionality
 
@@ -218,9 +250,9 @@ native Query Store metadata capture, the unchanged `qv_report`/Grafana
 boundary, native Showplan workflow, SSDT model, deployment pre/post checks, and
 transactional deterministic tests.
 
-The requested change was implemented as a focused lifecycle formalization, not
-a broad schema redesign. Apart from the three additive settings, function,
-view, and removal of the six legacy tautological switch blockers when present,
-existing storage is reused. No redundant `ArchiveRunKey` was added, no
-reporting contract changed, and no database, SQL Agent job, login, Grafana
-instance, master branch, or Voyager2 object was deployed or modified.
+The release candidate remains a focused lifecycle/reporting integration, not a
+broad schema redesign. Apart from the additive settings, canonical/contributor
+tables, lifecycle function, advisory view, reporting boundary, and removal of
+the six legacy tautological switch blockers when present, existing storage is
+reused. No redundant `ArchiveRunKey` was added, no SQL Agent job or `master`
+branch was changed, and no archive storage was converted.

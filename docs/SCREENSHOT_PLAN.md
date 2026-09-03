@@ -1,25 +1,46 @@
-# QueryVault Screenshot Plan
+# QueryVault Screenshot Record
 
-No screenshots are committed yet. Capture only from an actual QueryVault
-Grafana instance after datasource, permission, and data validation pass. Do not
-mock panels, paste secrets, expose connection settings, or use the unrelated
-Voyager2 CapLab Grafana instance without explicit approval.
+Actual captures were taken on 2026-09-03 from the dedicated Voyager2
+QueryVault Grafana OSS 13.1.0 instance after datasource, permission, API query,
+and real-data validation passed. They are unedited browser captures and expose
+no connection password or admin session.
 
-| Filename | UI state and required data | Caption | Documentation section |
-| --- | --- | --- | --- |
-| `docs/images/grafana-overview-period.png` | QueryVault Overview; source server/database selected; a current completed, post-safeguard period; all KPI and wait panels visible | QueryVault Overview summarizes one safely completed archive period through `qv_report`. | README, Key capabilities |
-| `docs/images/grafana-overview-periods-classification.png` | Overview scrolled to Available Archived Periods and Period Classifications; at least three completed periods; `Unclassified (not recorded)` visible | Available periods are selectable; classification remains explicitly unrecorded in V1. | GRAFANA_REPORTING_PLAN, QueryVault Overview |
-| `docs/images/grafana-period-comparison.png` | Period Comparison; two equal-duration post-safeguard periods; delta KPIs and workload table visible | Baseline and comparison workload deltas use source-native query identity within one source database. | QueryVault-Guide, Compare periods |
-| `docs/images/grafana-query-regressions.png` | Period Comparison scrolled to regressed/improved queries and plan changes; non-empty rows | Query-level regressions, improvements, and observed plan-count changes. | GRAFANA_REPORTING_PLAN, Period Comparison |
-| `docs/images/grafana-wait-analysis.png` | Wait Analysis; selected period and baseline with wait data; category selected; distribution and delta panels visible | Wait distribution and baseline change use archived Query Store wait categories. | GRAFANA_REPORTING_PLAN, Wait Analysis |
-| `docs/images/grafana-wait-contributors.png` | Wait Analysis scrolled to top contributing queries; query previews readable but no sensitive business text | Top queries contributing to the selected archived wait category. | Troubleshooting, Wait panels |
-| `docs/images/grafana-query-detail.png` | Query Detail; one non-sensitive query; multiple post-safeguard periods; KPI, timeline, and wait profile visible | Query Detail tracks executions, resources, waits, and plans across selected archive periods. | GRAFANA_REPORTING_PLAN, Query Detail |
-| `docs/images/grafana-plan-metadata.png` | Query Detail scrolled to plan metadata; period/query/plan IDs visible; XML payload not displayed | Grafana lists plan identifiers and metadata while plan rendering remains an SSMS responsibility. | Grafana-Setup, Native Showplan XML |
-| `docs/images/ssms-showplan-xml-result.png` | SSMS execution of `qv_report.usp_GetShowplanXml`; IDs from preceding screenshot; XML link visible; no credential UI | The reporting procedure returns native SQL Server Showplan XML. | Grafana-Setup, Native Showplan XML |
-| `docs/images/ssms-showplan-opened.png` | The exported `.sqlplan` opened in SSMS graphical plan viewer | Native Showplan XML exported from QueryVault opens directly in SSMS. | Architecture, System boundary |
+Selected evidence:
 
-Before capture, confirm the selected periods are not Voyager2 RunIDs 1, 2, 5,
-6, 7, 8, 9, 14, or 15. Use a test workload or redact query text through source
-data choice—not by editing the screenshot into a misleading state. Record the
-Grafana version and selected period IDs in the pull request description.
-Also exclude any legacy period reported by the duplicate-grain regression test.
+- source: `voyager2` / `WideWorldImporters`;
+- Overview archived period: RunID 47;
+- comparison: baseline RunID 44, comparison RunID 47;
+- Wait Analysis category: Buffer IO (category 6);
+- Query Detail: query 42269 over RunIDs 44 and 47.
+
+| Status | Filename | UI state and caption |
+| --- | --- | --- |
+| CAPTURED | `docs/images/grafana-overview-period.jpg` | QueryVault Overview shows 353 executions, CPU/duration/reads, 94 queries/plans, available periods (including live validation RunID 101), explicit unclassified state, and waits through `qv_report`. |
+| CAPTURED | `docs/images/grafana-period-comparison.jpg` | Period Comparison shows equal-duration RunIDs 44 and 47, four percentage deltas, workload changes, and populated query regression/improvement tables. |
+| CAPTURED | `docs/images/grafana-wait-analysis.jpg` | Wait Analysis shows 184 ms Buffer IO, distribution, and baseline comparison. The live DOM/API check also confirmed eight contributing-query rows and corrected ID/percentage formatting. |
+| CAPTURED | `docs/images/grafana-query-detail.jpg` | Query Detail shows a non-sensitive system-catalog query, two archived periods, KPI values, wait profile, performance history, plan metadata, and native Showplan retrieval instructions. |
+| NOT TESTED | `docs/images/grafana-datasource.jpg` | Not captured. Datasource health and secret-field presence were verified through the authenticated Grafana API; a credentials/configuration UI screenshot was intentionally avoided. |
+| NOT TESTED | `docs/images/ssms-showplan-xml-result.jpg` | SSMS was unavailable. Native XML validity and `.sqlplan` export passed without exposing the XML in Grafana. |
+| NOT TESTED | `docs/images/ssms-showplan-opened.jpg` | SSMS graphical rendering was not available and is not inferred. |
+
+## Captures
+
+### QueryVault Overview
+
+![QueryVault Overview with a completed archived period](images/grafana-overview-period.jpg)
+
+### Period Comparison
+
+![QueryVault period comparison for RunIDs 44 and 47](images/grafana-period-comparison.jpg)
+
+### Wait Analysis
+
+![QueryVault wait analysis for Buffer IO](images/grafana-wait-analysis.jpg)
+
+### Query Detail
+
+![QueryVault query detail across two archived periods](images/grafana-query-detail.jpg)
+
+The selected periods are outside the nine known pre-safeguard period IDs. The
+query text is SQL Server system-catalog inspection rather than business data.
+No screenshot was manufactured or edited to simulate results.

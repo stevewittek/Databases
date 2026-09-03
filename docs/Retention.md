@@ -72,6 +72,11 @@ an informational warning at that percentage and rejects a new run beyond the
 configured retained-run maximum. A separate global guard reserves ten of SQL
 Server's 15,000 possible partitions and rejects projected fanout above 14,990.
 
+RunID identity gaps do not consume one partition per skipped number. Allocation
+adds only the exact RunID boundary and its future boundary when they are
+missing. Voyager2 live validation demonstrated this with a jump from retained
+RunID 47 to RunID 101: the resulting maximum boundary is 102 and fanout is 103.
+
 Schedule cadence remains controlled by the existing schedule settings. A run
 is not assumed to represent a calendar day, month, or other fixed interval.
 
@@ -80,3 +85,17 @@ is not assumed to represent a calendar day, month, or other fixed interval.
 Purged periods disappear from `qv_report.periods` and Grafana variables. A
 dashboard or external report must not assume period IDs are contiguous. Period
 classification is currently unimplemented and does not affect retention.
+
+## Voyager2 validation evidence
+
+On 2026-09-03 the deployed lifecycle tests used transactional disposable data
+only. They proved all ten run-owned table partitions switch and truncate, the
+disposable metadata row is removed, the obsolete empty boundary merges, and a
+pinned run rejects purge and direct maintenance operations. The transaction
+rolled back after every assertion; no historical Voyager2 archive was purged.
+
+Post-test checks found zero maintenance rows, zero nonaligned run-owned indexes,
+zero legacy tautological switch constraints, and no canonical physical
+partition shared by multiple RunIDs. The verified pre-deployment copy-only
+backup and rollback baseline are recorded in
+[Voyager2 RC Validation](VOYAGER2_RC_VALIDATION.md).

@@ -1,5 +1,10 @@
 # QueryVault Operator Guide
 
+Voyager2 validation status: the QueryVault V1 database/reporting candidate and
+dedicated Grafana integration passed live validation on 2026-09-03. See
+[Voyager2 RC Validation](VOYAGER2_RC_VALIDATION.md). This status does not
+authorize a storage conversion or deployment to another environment.
+
 ## Register a source
 
 Run from `QueryVaultDB` with an identity authorized for QueryVault operations:
@@ -85,6 +90,11 @@ Alternatively supply `@PlanID`. Click the XML cell in SSMS, then save it with a
 `.sqlplan` extension. QueryVault returns native SQL Server Showplan XML and does
 not provide a renderer.
 
+For command-line export, ensure the client does not truncate large XML values.
+For example, `Invoke-Sqlcmd` must use an appropriately large `-MaxCharLength`.
+Validate the exported file has `ShowPlanXML` as its root and the Microsoft SQL
+Server Showplan namespace before opening it in SSMS.
+
 ## Retention
 
 Always preview candidates:
@@ -113,6 +123,9 @@ EXEC dbo.usp_ManagePartitions
 numeric RunID. QueryVault also protects a global physical fanout of 14,990,
 leaving ten partitions below SQL Server's hard 15,000 limit. Do not use
 `partition_number` as an ID; boundary merges can renumber partitions.
+Identity values consumed by rolled-back work can create RunID gaps. Exact/sparse
+allocation creates only the required RunID and future boundaries, not one
+partition per skipped identity.
 
 Storage advice is read-only and evaluates runtime and wait facts separately:
 
@@ -139,3 +152,6 @@ separate future cold-tier evaluation.
   partition in place.
 - Do not put SQL or Grafana credentials in scripts, YAML committed to Git, or
   screenshots.
+- Keep production TLS certificate validation enabled. Voyager2's isolated lab
+  Grafana currently uses a documented, uncommitted `tlsSkipVerify` override
+  because its SQL Server certificate has no usable DNS identity.

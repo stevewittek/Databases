@@ -166,14 +166,39 @@ The Query Detail dashboard lists the period ID, query ID, and plan ID needed for
 
 Dashboard SQL may use only `qv_report` objects. If a new panel requires data not present in that schema, extend and document the reporting contract first. Do not point a dashboard at internal `dbo` tables as a shortcut.
 
-## Current Voyager2 note
+## Voyager2 validated configuration
 
-As of 2026-09-03, Voyager2 has archived QueryVault data but does not have the
-`qv_report` schema or `queryvault_grafana` principal. It has an unrelated
-`caplab-grafana` container; this package does not claim or alter that service.
-Complete the DBA bootstrap, reviewed QueryVault deployment, reader provisioning,
-and a dedicated/mutually approved Grafana mount before following the UI test
-steps above.
+As of 2026-09-03, Voyager2 has the V1 `qv_report` contract, the restricted
+`queryvault_grafana` login/user, and a dedicated QueryVault Grafana OSS 13.1.0
+container. The unrelated `caplab-grafana` service was not claimed, restarted,
+or modified.
+
+The dedicated instance:
+
+- uses Grafana's native `mssql` datasource;
+- mounts the version-controlled dashboard and provider directories read-only;
+- stores generated Grafana/SQL secrets only in
+  `/home/nasa/.config/queryvault-grafana/grafana.env`, with host mode 0600;
+- uses a persistent Grafana volume and `restart: unless-stopped`;
+- binds only to Voyager2 loopback port 13001; and
+- allows anonymous Viewer access only on that loopback-bound validation
+  instance so browser screenshots can be captured without exposing an admin
+  session.
+
+The SQL principal can select `qv_report`, execute
+`qv_report.usp_GetShowplanXml`, and cannot select `dbo.RunMetadata`. Datasource
+health returns `Database Connection OK`. All 49 dashboard variable and panel
+queries completed without an error or an empty required variable.
+
+Voyager2's SQL Server certificate has no usable DNS identity. The lab therefore
+uses a runtime-only, uncommitted datasource copy with `tlsSkipVerify: true`.
+The tracked datasource file remains `tlsSkipVerify: false`. Production must
+install a certificate/trust chain that allows normal validation; do not copy
+the Voyager2 exception.
+
+Actual validation captures are listed in [Screenshot Plan](SCREENSHOT_PLAN.md),
+and complete evidence is in
+[Voyager2 RC Validation](VOYAGER2_RC_VALIDATION.md).
 
 ## References
 

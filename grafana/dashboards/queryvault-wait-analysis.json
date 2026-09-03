@@ -40,7 +40,15 @@
     },
     {
       "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
-      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "baseline_wait_ms"}, "properties": [{"id": "unit", "value": "ms"}]},
+          {"matcher": {"id": "byName", "options": "selected_wait_ms"}, "properties": [{"id": "unit", "value": "ms"}]},
+          {"matcher": {"id": "byName", "options": "delta_ms"}, "properties": [{"id": "unit", "value": "ms"}]},
+          {"matcher": {"id": "byName", "options": "delta_pct"}, "properties": [{"id": "unit", "value": "percent"}]}
+        ]
+      },
       "gridPos": {"h": 11, "w": 12, "x": 12, "y": 4},
       "id": 4,
       "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},
@@ -50,7 +58,13 @@
     },
     {
       "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
-      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "total_wait_ms"}, "properties": [{"id": "unit", "value": "ms"}]},
+          {"matcher": {"id": "byName", "options": "max_query_wait_time_ms"}, "properties": [{"id": "unit", "value": "ms"}]}
+        ]
+      },
       "gridPos": {"h": 12, "w": 24, "x": 0, "y": 15},
       "id": 5,
       "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},

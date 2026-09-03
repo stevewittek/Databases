@@ -90,7 +90,15 @@
     },
     {
       "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
-      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "baseline_wait_ms"}, "properties": [{"id": "unit", "value": "ms"}]},
+          {"matcher": {"id": "byName", "options": "comparison_wait_ms"}, "properties": [{"id": "unit", "value": "ms"}]},
+          {"matcher": {"id": "byName", "options": "wait_delta_ms"}, "properties": [{"id": "unit", "value": "ms"}]},
+          {"matcher": {"id": "byName", "options": "delta_pct"}, "properties": [{"id": "unit", "value": "percent"}]}
+        ]
+      },
       "gridPos": {"h": 9, "w": 14, "x": 10, "y": 21},
       "id": 9,
       "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},

@@ -58,6 +58,10 @@ Query Store duration and CPU values are stored in microseconds; the reporting co
    Voyager2 periods contain an interval ending after the period's recorded end.
    Treat those periods as potentially partial; see
    [Query Store correctness](Query-Store-Correctness.md).
+6. **Reporting does not repair capture multiplicity.** The integrated capture
+   rejects repeated documented-grain observations, but canonical source
+   aggregation is not implemented. `qv_report` sums accepted archived rows and
+   deliberately does not hide legacy duplicates.
 
 ## V1 `qv_report` contract
 

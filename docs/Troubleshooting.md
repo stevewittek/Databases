@@ -61,8 +61,17 @@ test. Grafana intentionally does not render plans.
 Stop using affected runs for analysis. Run
 `Tests/TestQueryStoreAggregationGrain.sql` as a read-only diagnostic, confirm the
 procedure still applies the flush cutoff and completed-interval predicate, and
-inspect duplicate/orphan results. Do not delete or rewrite archive rows during
-diagnosis.
+inspect duplicate/orphan results. The integrated capture also rejects newly
+copied repeated grains. This is fail-closed detection, not canonical source
+aggregation. Do not delete, rewrite, `DISTINCT`, or arbitrarily choose one row
+during diagnosis.
+
+## Partition maintenance is rejected
+
+The integrated procedure refuses to switch or truncate when a physical
+partition contains more than one `RunID`. Inspect partition boundaries and the
+legacy maintenance-table constraints. Do not bypass the guard: switch/truncate
+acts on the entire physical partition and could otherwise remove another run.
 
 ## Production workflow will not run from the branch
 

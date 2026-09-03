@@ -22,3 +22,4 @@ Before capture, confirm the selected periods are not Voyager2 RunIDs 1, 2, 5,
 6, 7, 8, 9, 14, or 15. Use a test workload or redact query text through source
 data choice—not by editing the screenshot into a misleading state. Record the
 Grafana version and selected period IDs in the pull request description.
+Also exclude any legacy period reported by the duplicate-grain regression test.

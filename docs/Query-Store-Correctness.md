@@ -1,73 +1,105 @@
 # Query Store Capture Correctness
 
-## Required grain
+## Microsoft-documented grains
 
-SQL Server documents that an active Query Store interval can expose multiple
+An active Query Store interval can expose separate persisted and in-memory
 runtime rows for the same `(plan_id, execution_type,
-runtime_stats_interval_id)`. Consumers must aggregate at that grain; a
-`runtime_stats_id` alone is not a complete active-interval identity. Wait data
-has the corresponding grain plus `wait_category`.
+runtime_stats_interval_id)`. Consumers must aggregate at that grain;
+`runtime_stats_id` alone is not a complete interval observation. Wait data has
+the corresponding grain plus `wait_category`.
 
 References:
 
 - [sys.query_store_runtime_stats](https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-query-store-runtime-stats-transact-sql?view=sql-server-ver17)
 - [sys.query_store_wait_stats](https://learn.microsoft.com/en-us/sql/relational-databases/system-catalog-views/sys-query-store-wait-stats-transact-sql?view=sql-server-ver17)
 
-## Current capture: PASS
+## Integrated capture behavior
 
-`dbo.usp_ArchiveQueryStore` reads the source's
-`flush_interval_seconds`, computes `now UTC - flush interval`, and caps the
-requested end at that safe cutoff. Runtime, wait, and interval reads require
-`i.end_time <= @EndDateTime`. QueryVault therefore archives past intervals,
-where the documented catalog behavior provides one row at the relevant grain.
+`dbo.usp_ArchiveQueryStore` applies two layers of protection:
 
-Live Voyager2 evidence on 2026-09-03:
+1. it reads `flush_interval_seconds`, caps the requested end at current UTC
+   minus one flush interval, and selects only intervals ending by that effective
+   end; and
+2. after copying runtime or wait rows inside the archive transaction, it rejects
+   any repeated documented-grain group and rolls back the archive data before
+   the run can be marked complete.
 
-- procedure contains both the flush cutoff and completed interval filter;
-- zero duplicate runtime groups at `(RunID, plan_id, execution_type,
-  runtime_stats_interval_id)`;
-- zero duplicate wait groups at `(RunID, plan_id,
-  runtime_stats_interval_id, execution_type, wait_category)`;
-- zero runtime and wait interval orphans.
+The guard prevents a newly detected duplicate from becoming an apparently valid
+completed period. It does not aggregate the observations and therefore does not
+satisfy the complete hard requirement.
 
-The archive does not aggregate by `runtime_stats_id`; it preserves source rows.
-That is correct for the deliberately excluded-active-interval capture model.
+Status:
 
-## Historical corpus: PARTIAL
+- completed-interval preference: **IMPLEMENTED**;
+- duplicate-grain rejection: **IMPLEMENTED**;
+- canonical runtime aggregation: **PARTIAL / not implemented**;
+- canonical wait aggregation: **PARTIAL / not implemented**;
+- provisional active-interval reconciliation: **MISSING**.
 
-Nine Voyager2 periods—RunIDs 1, 2, 5, 6, 7, 8, 9, 14, and 15—contain at least
-one archived interval whose end is after `RunMetadata.EndDateTime`. These runs
-precede the completed-interval safeguard added on 2026-08-28. They contain no
-duplicate grain groups, but an active-interval snapshot can still be partial and
-must not be assumed final merely because no duplicate is present.
+## Why rejection is not aggregation
 
-Smallest safe repair:
+Runtime aggregation must sum `count_executions`, compute execution-weighted
+means, preserve extrema, select chronological last values, and combine standard
+deviation correctly. Wait aggregation must preserve additive wait totals and
+define average, extrema, last, and dispersion semantics in relation to the
+matching execution population.
 
-1. exclude these periods from baseline/regression decisions now;
-2. if the source still retains the exact windows, re-archive them as new runs
-   using current capture and validate boundaries;
-3. preserve the original periods until the replacements are reconciled;
-4. purge originals only through normal reviewed retention handling.
+Using `DISTINCT`, choosing an arbitrary source ID, or keeping only the newest
+row would discard measurements. The existing target rows also expose one native
+`runtime_stats_id`/`wait_stats_id` and one `replica_group_id`; relabeling one as
+a canonical multi-row aggregate would lose lineage and misstate its meaning.
 
-No in-place rewrite is implemented because it would manufacture finality from
-an incomplete historical snapshot and because source availability has not been
-established.
+The smallest correct design is documented in
+[Target and Gap Analysis](TARGET_GAP_ANALYSIS.md). It requires consistent source
+staging, reviewed combination formulas, contributor lineage, and reconciliation.
+It is not implemented here because this integration is not authorized to
+redesign internal storage.
 
-## Regression test
+## Reporting behavior
 
-`QueryVault/Tests/TestQueryStoreAggregationGrain.sql` fails when the cutoff or
-completed-interval predicate disappears, when documented-grain duplicates
-exist, or when runtime/wait rows have orphaned intervals. Historical boundary
-violations are emitted as review rows rather than failing every upgraded
-installation.
+`qv_report` aggregates archived measurements for dashboards; it does not repair,
+deduplicate, or conceal invalid archive rows. That boundary is intentional:
+reporting must not invent data-correction policy. A completed period produced by
+the integrated guarded capture cannot contain repeated documented grains, but
+legacy data can.
+
+## Validation evidence
+
+Voyager1's SQL Server 2019 audit found 884 archived runtime rows with two
+duplicate logical groups from the older deployed capture procedure. It found no
+duplicate wait groups among only six wait rows. These results prove the runtime
+risk and do not establish wait correctness.
+
+Voyager2's current archive contained 2,366 runtime and 391 wait rows with zero
+duplicate documented-grain groups and zero interval orphans. Nine early
+Voyager2 periods—RunIDs 1, 2, 5, 6, 7, 8, 9, 14, and 15—contain intervals whose
+end exceeds the period's recorded end. They predate the cutoff safeguard and can
+be partial even without duplicate rows.
+
+Safe handling:
+
+1. exclude known legacy/partial periods from baseline decisions;
+2. re-archive retained source windows with the guarded procedure where possible;
+3. preserve originals until replacements reconcile; and
+4. purge only through normal reviewed retention handling.
+
+## Regression coverage
+
+- `TestQueryStoreAggregationGrain.sql` checks cutoff/predicate presence,
+  duplicate target groups, interval orphans, and reports historical boundary
+  violations.
+- `TestProcedureCompilation.sql` compiles the hardened core procedures inside a
+  rolled-back transaction.
+- `TestRepositoryContracts.ps1` verifies that rejection guards and declarative
+  model sources remain synchronized.
 
 ```mermaid
 flowchart TD
-    R[Requested end] --> C{Older than now minus\nflush interval?}
-    C -->|yes| E[Use requested end]
-    C -->|no| S[Use safe cutoff]
-    E --> I[Select intervals with end_time <= effective end]
-    S --> I
-    I --> RW[Archive runtime and waits joined to those intervals]
-    RW --> G[Validate documented grains and orphan references]
+    R[Requested end] --> C[Cap at now minus flush interval]
+    C --> I[Select intervals ending by effective end]
+    I --> COPY[Copy source runtime and waits transactionally]
+    COPY --> D{Repeated documented grain?}
+    D -->|yes| FAIL[Roll back facts and mark run Failed]
+    D -->|no| DONE[Mark archive run Completed]
+    FAIL --> FUT[Future canonical staging and aggregation design]
 ```

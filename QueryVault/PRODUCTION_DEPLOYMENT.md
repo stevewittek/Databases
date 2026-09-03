@@ -76,6 +76,12 @@ core stored procedures, six `qv_report` views, and the Showplan retrieval
 procedure, and executes only the idempotent partition scripts. It never runs SQL
 Agent job scripts or retention/purge procedures.
 
+The core procedures include identity-jump partition growth, shared-partition
+switch/truncate rejection, owned-transaction safeguards, and fail-closed
+runtime/wait duplicate-grain detection. The last safeguard does not implement
+canonical source aggregation; see `docs/Query-Store-Correctness.md` before
+authorizing capture changes.
+
 Before the sequence can run, a DBA must execute the idempotent
 `Security/ProvisionReportingSchema.sql` bootstrap once. The deployment identity
 cannot create a `dbo`-owned schema. Deployment preflights this condition before

@@ -1,13 +1,4 @@
-/*
-	Stored Procedure: usp_ArchiveQueryStore
-	Archives QueryStore data from source database to QueryVaultDB
-*/
-
-SET ANSI_NULLS ON;
-GO
-SET QUOTED_IDENTIFIER ON;
-GO
-CREATE OR ALTER PROCEDURE dbo.usp_ArchiveQueryStore
+CREATE PROCEDURE dbo.usp_ArchiveQueryStore
 	@SourceDatabaseName NVARCHAR(128),
 	@RunName NVARCHAR(255),
 	@StartDateTime DATETIME2(7) = NULL,
@@ -38,7 +29,7 @@ BEGIN
 		DECLARE @ConfigID INT;
 		DECLARE @DefaultDaysToArchive INT;
 
-		SELECT 
+		SELECT
 			@ConfigID = ConfigID,
 			@DefaultDaysToArchive = DefaultDaysToArchive,
 			@ActualBatchSize = ISNULL(@BatchSize, MaxRowsPerBatch),
@@ -125,7 +116,7 @@ BEGIN
 			IF @PartitionsToAdd < 10
 				SET @PartitionsToAdd = 10;
 
-			EXEC dbo.usp_ManagePartitions 
+			EXEC dbo.usp_ManagePartitions
 				@Operation = 'AddPartition',
 				@NewPartitionCount = @PartitionsToAdd;
 		END
@@ -138,7 +129,7 @@ BEGIN
 		SET @SQL = N'
 		INSERT INTO dbo.query_store_runtime_stats_interval
 		(RunID, runtime_stats_interval_id, start_time, end_time, comment)
-		SELECT 
+		SELECT
 			@RunID,
 			runtime_stats_interval_id,
 			start_time,
@@ -159,7 +150,7 @@ BEGIN
 			@RowsArchived = @RowCount OUTPUT;
 		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
 
-		UPDATE dbo.RunMetadata 
+		UPDATE dbo.RunMetadata
 		SET RowsArchived_RuntimeStatsInterval = @RowCount
 		WHERE RunID = @RunID;
 
@@ -199,7 +190,7 @@ BEGIN
 			@RowsArchived = @RowCount OUTPUT;
 		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
 
-		UPDATE dbo.RunMetadata 
+		UPDATE dbo.RunMetadata
 		SET RowsArchived_QueryText = @RowCount
 		WHERE RunID = @RunID;
 
@@ -215,7 +206,7 @@ BEGIN
 		 avg_bind_cpu_time, last_bind_cpu_time, avg_optimize_duration, last_optimize_duration,
 		 avg_optimize_cpu_time, last_optimize_cpu_time, avg_compile_memory_kb, last_compile_memory_kb,
 		 max_compile_memory_kb, is_clouddb_internal_query)
-		SELECT 
+		SELECT
 			@RunID,
 			query_id, query_text_id, context_settings_id, object_id, batch_sql_handle, query_hash,
 			is_internal_query, query_parameterization_type, query_parameterization_type_desc,
@@ -247,7 +238,7 @@ BEGIN
 			@RowsArchived = @RowCount OUTPUT;
 		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
 
-		UPDATE dbo.RunMetadata 
+		UPDATE dbo.RunMetadata
 		SET RowsArchived_Query = @RowCount
 		WHERE RunID = @RunID;
 
@@ -261,7 +252,7 @@ BEGIN
 		 count_compiles, initial_compile_start_time, last_compile_start_time, last_execution_time,
 			 avg_compile_duration, last_compile_duration, plan_forcing_type, plan_forcing_type_desc,
 			 has_compile_replay_script, is_optimized_plan_forcing_disabled, plan_type, plan_type_desc)
-		SELECT 
+		SELECT
 			@RunID,
 			p.plan_id, p.query_id, p.plan_group_id, p.engine_version, p.compatibility_level, p.query_plan_hash,
 			p.query_plan, p.is_online_index_plan, p.is_trivial_plan, p.is_parallel_plan, p.is_forced_plan,
@@ -289,7 +280,7 @@ BEGIN
 			@RowsArchived = @RowCount OUTPUT;
 		PRINT 'Archived ' + CAST(@RowCount AS VARCHAR(20)) + ' rows';
 
-		UPDATE dbo.RunMetadata 
+		UPDATE dbo.RunMetadata
 		SET RowsArchived_Plan = @RowCount
 		WHERE RunID = @RunID;
 
@@ -313,7 +304,7 @@ BEGIN
 			 avg_tempdb_space_used, last_tempdb_space_used, min_tempdb_space_used, max_tempdb_space_used, stdev_tempdb_space_used,
 			 avg_page_server_io_reads, last_page_server_io_reads, min_page_server_io_reads, max_page_server_io_reads, stdev_page_server_io_reads,
 			 replica_group_id)
-		SELECT 
+		SELECT
 			@RunID,
 			rs.runtime_stats_id, rs.plan_id, rs.runtime_stats_interval_id, rs.execution_type, rs.execution_type_desc,
 			rs.first_execution_time, rs.last_execution_time, rs.count_executions,
@@ -358,7 +349,7 @@ BEGIN
 		)
 			THROW 51007, 'Runtime statistics contain multiple rows at the documented Query Store grain.', 1;
 
-		UPDATE dbo.RunMetadata 
+		UPDATE dbo.RunMetadata
 		SET RowsArchived_RuntimeStats = @RowCount
 		WHERE RunID = @RunID;
 
@@ -370,7 +361,7 @@ BEGIN
 		 execution_type, execution_type_desc, total_query_wait_time_ms, avg_query_wait_time_ms,
 		 last_query_wait_time_ms, min_query_wait_time_ms, max_query_wait_time_ms, stdev_query_wait_time_ms,
 		 replica_group_id)
-		SELECT 
+		SELECT
 			@RunID,
 			ws.wait_stats_id, ws.plan_id, ws.runtime_stats_interval_id, ws.wait_category, ws.wait_category_desc,
 			ws.execution_type, ws.execution_type_desc, ws.total_query_wait_time_ms, ws.avg_query_wait_time_ms,
@@ -401,20 +392,20 @@ BEGIN
 		)
 			THROW 51008, 'Wait statistics contain multiple rows at the documented Query Store grain.', 1;
 
-		UPDATE dbo.RunMetadata 
+		UPDATE dbo.RunMetadata
 		SET RowsArchived_WaitStats = @RowCount
 		WHERE RunID = @RunID;
 
 		-- Mark run as completed
 		UPDATE dbo.RunMetadata
-		SET 
+		SET
 			RunEndTime = SYSUTCDATETIME(),
 			RunStatus = 'Completed'
 		WHERE RunID = @RunID;
 
 		-- Update last run time in config
 		UPDATE dbo.DatabaseConfig
-		SET 
+		SET
 			LastRunDateTime = SYSUTCDATETIME(),
 			ModifiedDate = SYSUTCDATETIME()
 		WHERE ConfigID = @ConfigID;
@@ -436,7 +427,7 @@ BEGIN
 		IF @RunID IS NOT NULL
 		BEGIN
 			UPDATE dbo.RunMetadata
-			SET 
+			SET
 				RunEndTime = SYSUTCDATETIME(),
 				RunStatus = 'Failed',
 				Comments = ERROR_MESSAGE()

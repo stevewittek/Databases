@@ -3,10 +3,6 @@
 	Tracks each QueryStore archive run with metadata and protection flags
 */
 
-SET ANSI_NULLS ON;
-SET QUOTED_IDENTIFIER ON;
-GO
-
 CREATE TABLE dbo.RunMetadata
 (
 	RunID INT IDENTITY(1,1) NOT NULL,
@@ -44,7 +40,6 @@ CREATE TABLE dbo.RunMetadata
 	CONSTRAINT CK_RunMetadata_RunStatus CHECK (RunStatus IN ('In Progress', 'Completed', 'Failed'))
 );
 GO
-
 CREATE NONCLUSTERED INDEX IX_RunMetadata_SourceDatabase 
 	ON dbo.RunMetadata(SourceDatabaseName, SourceServerName, StartDateTime, EndDateTime);
 GO
@@ -57,7 +52,4 @@ GO
 CREATE NONCLUSTERED INDEX IX_RunMetadata_DoNotDelete 
 	ON dbo.RunMetadata(DoNotDelete, RetentionDate) 
 	WHERE DoNotDelete = 0;
-GO
-
-PRINT 'Table dbo.RunMetadata created successfully';
 GO

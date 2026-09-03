@@ -134,6 +134,9 @@ If variables are empty:
 - inspect Grafana server logs for TLS, login, or SQL errors.
 
 Empty wait panels are valid when the selected archive has no archived wait rows.
+Do not select a period reported by the Query Store grain regression test as an
+authoritative baseline. Grafana reflects accepted archive data; it does not
+repair legacy duplicate or partial observations.
 
 ## Native Showplan XML
 

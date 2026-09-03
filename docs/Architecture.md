@@ -34,9 +34,11 @@ sequenceDiagram
 ```
 
 The cutoff is essential: an active Query Store interval can contain separate
-persisted and in-memory rows at the same documented aggregation grain. The
-archive retains source row identifiers, but reporting totals are valid because
-current capture excludes active intervals.
+persisted and in-memory rows at the same documented aggregation grain. Current
+capture also fails closed if repeated grains are observed. This prevents a bad
+completed run but does not implement canonical source aggregation; reporting is
+valid only for archive periods that pass these safeguards or are independently
+reconciled.
 
 ## Reporting flow and trust
 

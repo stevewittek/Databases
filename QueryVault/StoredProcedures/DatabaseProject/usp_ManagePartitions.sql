@@ -1,13 +1,4 @@
-/*
-	Stored Procedure: usp_ManagePartitions
-	Manages partition operations including add, split, switch, and cleanup
-*/
-
-SET ANSI_NULLS ON;
-GO
-SET QUOTED_IDENTIFIER ON;
-GO
-CREATE OR ALTER PROCEDURE dbo.usp_ManagePartitions
+CREATE PROCEDURE dbo.usp_ManagePartitions
 	@Operation NVARCHAR(50), -- 'AddPartition', 'SwitchOut', 'Truncate', 'GetInfo'
 	@RunID INT = NULL,
 	@NewPartitionCount INT = 10 -- How many new partitions to add when extending
@@ -26,7 +17,7 @@ BEGIN
 		-- Operation: Get Partition Information
 		IF @Operation = 'GetInfo'
 		BEGIN
-			SELECT 
+			SELECT
 				pf.name AS PartitionFunction,
 				pf.fanout AS PartitionCount,
 				ps.name AS PartitionScheme,
@@ -124,7 +115,7 @@ BEGIN
 
 			-- Switch each QueryStore table partition to maintenance table
 			DECLARE @Tables TABLE (TableName NVARCHAR(128));
-			INSERT INTO @Tables VALUES 
+			INSERT INTO @Tables VALUES
 				('query_store_query'),
 				('query_store_query_text'),
 				('query_store_plan'),
@@ -133,7 +124,7 @@ BEGIN
 				('query_store_wait_stats');
 
 			DECLARE @TableName NVARCHAR(128);
-			DECLARE table_cursor CURSOR LOCAL FAST_FORWARD FOR 
+			DECLARE table_cursor CURSOR LOCAL FAST_FORWARD FOR
 				SELECT TableName FROM @Tables;
 
 			OPEN table_cursor;
@@ -141,9 +132,9 @@ BEGIN
 
 			WHILE @@FETCH_STATUS = 0
 			BEGIN
-				SET @SQL = 'ALTER TABLE dbo.' + QUOTENAME(@TableName) + 
-						  ' SWITCH PARTITION ' + CAST(@PartitionNumber AS VARCHAR(20)) + 
-						  ' TO dbo.' + QUOTENAME(@TableName + '_PartitionMaintenance') + 
+				SET @SQL = 'ALTER TABLE dbo.' + QUOTENAME(@TableName) +
+						  ' SWITCH PARTITION ' + CAST(@PartitionNumber AS VARCHAR(20)) +
+						  ' TO dbo.' + QUOTENAME(@TableName + '_PartitionMaintenance') +
 						  ' PARTITION ' + CAST(@PartitionNumber AS VARCHAR(20)) + ';';
 
 				EXEC sys.sp_executesql @SQL;
@@ -208,7 +199,7 @@ BEGIN
 
 			-- Truncate each maintenance table partition
 			DECLARE @MaintenanceTables TABLE (TableName NVARCHAR(128));
-			INSERT INTO @MaintenanceTables VALUES 
+			INSERT INTO @MaintenanceTables VALUES
 				('query_store_query_PartitionMaintenance'),
 				('query_store_query_text_PartitionMaintenance'),
 				('query_store_plan_PartitionMaintenance'),
@@ -216,7 +207,7 @@ BEGIN
 				('query_store_runtime_stats_interval_PartitionMaintenance'),
 				('query_store_wait_stats_PartitionMaintenance');
 
-			DECLARE maint_cursor CURSOR LOCAL FAST_FORWARD FOR 
+			DECLARE maint_cursor CURSOR LOCAL FAST_FORWARD FOR
 				SELECT TableName FROM @MaintenanceTables;
 
 			OPEN maint_cursor;
@@ -224,7 +215,7 @@ BEGIN
 
 			WHILE @@FETCH_STATUS = 0
 			BEGIN
-				SET @SQL = 'TRUNCATE TABLE dbo.' + QUOTENAME(@TableName) + 
+				SET @SQL = 'TRUNCATE TABLE dbo.' + QUOTENAME(@TableName) +
 						  ' WITH (PARTITIONS(' + CAST(@PartitionNumber AS VARCHAR(20)) + '));';
 
 				EXEC sys.sp_executesql @SQL;

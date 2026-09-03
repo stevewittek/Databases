@@ -40,13 +40,9 @@ CREATE TABLE dbo.query_store_query
 	CONSTRAINT PK_query_store_query PRIMARY KEY NONCLUSTERED (RunID, query_id)
 ) ON PS_RunID(RunID);
 GO
-
 -- Clustered columnstore index with configurable compression delay
 CREATE CLUSTERED COLUMNSTORE INDEX CCI_query_store_query 
 	ON dbo.query_store_query
 	WITH (COMPRESSION_DELAY = 0 MINUTES)
 	ON PS_RunID(RunID);
-GO
-
-PRINT 'Table dbo.query_store_query created with partitioning and clustered columnstore index';
 GO

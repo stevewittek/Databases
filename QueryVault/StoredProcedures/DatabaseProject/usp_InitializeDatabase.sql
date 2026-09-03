@@ -1,13 +1,4 @@
-/*
-	Stored Procedure: usp_InitializeDatabase
-	Registers a new database for QueryStore archiving
-*/
-
-SET ANSI_NULLS ON;
-GO
-SET QUOTED_IDENTIFIER ON;
-GO
-CREATE OR ALTER PROCEDURE dbo.usp_InitializeDatabase
+CREATE PROCEDURE dbo.usp_InitializeDatabase
 	@DatabaseName NVARCHAR(128),
 	@ServerName NVARCHAR(128) = NULL,
 	@DefaultDaysToArchive INT = 30,
@@ -40,7 +31,7 @@ BEGIN
 			PRINT 'Updating configuration...';
 
 			UPDATE dbo.DatabaseConfig
-			SET 
+			SET
 				DefaultDaysToArchive = @DefaultDaysToArchive,
 				ScheduleType = @ScheduleType,
 				ScheduleTime = @ScheduleTime,
@@ -91,7 +82,7 @@ BEGIN
 		END
 
 		-- Return the config information
-		SELECT 
+		SELECT
 			ConfigID,
 			DatabaseName,
 			ServerName,

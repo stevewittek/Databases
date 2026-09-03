@@ -58,17 +58,27 @@
   <Import Condition="'$(SQLDBExtensionsRefPath)' != ''" Project="$(SQLDBExtensionsRefPath)\Microsoft.Data.Tools.Schema.SqlTasks.targets" />
   <Import Condition="'$(SQLDBExtensionsRefPath)' == ''" Project="$(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\SSDT\Microsoft.Data.Tools.Schema.SqlTasks.targets" />
   <ItemGroup>
-	<Folder Include="Properties" />
+    <ArtifactReference Include="$(DacPacRootPath)\Extensions\Microsoft\SQLDB\Extensions\SqlServer\150\SqlSchemas\master.dacpac">
+      <HintPath>$(DacPacRootPath)\Extensions\Microsoft\SQLDB\Extensions\SqlServer\150\SqlSchemas\master.dacpac</HintPath>
+      <SuppressMissingDependenciesErrors>False</SuppressMissingDependenciesErrors>
+      <DatabaseVariableLiteralValue>master</DatabaseVariableLiteralValue>
+    </ArtifactReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Properties" />
 	<Folder Include="Tables" />
 	<Folder Include="Tables\Core" />
 	<Folder Include="Tables\PartitionMaintenance" />
 	<Folder Include="Tables\QueryStore" />
 	<Folder Include="Jobs" />
-	<Folder Include="Partitions" />
+    <Folder Include="Partitions" />
+    <Folder Include="Partitions\DatabaseProject" />
 	<Folder Include="Scripts" />
 	<Folder Include="StoredProcedures" />
+	<Folder Include="StoredProcedures\DatabaseProject" />
 	<Folder Include="Schemas" />
 	<Folder Include="Views" />
+	<Folder Include="Views\DatabaseProject" />
 	<Folder Include="Security" />
 	<Folder Include="Tests" />
   </ItemGroup>
@@ -79,11 +89,25 @@
 	<None Include="Tables\PartitionMaintenance\.gitkeep" />
 	<None Include="Tables\QueryStore\.gitkeep" />
 	<None Include="Jobs\.gitkeep" />
-	<None Include="Partitions\.gitkeep" />
+    <None Include="Partitions\.gitkeep" />
+    <None Include="Partitions\PartitionFunction.sql" />
+    <None Include="Partitions\PartitionScheme.sql" />
 	<None Include="Scripts\.gitkeep" />
 	<None Include="Scripts\DeployQueryVault.ps1" />
 	<None Include="Scripts\FixProject.ps1" />
-	<None Include="StoredProcedures\.gitkeep" />
+    <None Include="StoredProcedures\.gitkeep" />
+    <None Include="StoredProcedures\usp_ArchiveQueryStore.sql" />
+    <None Include="StoredProcedures\usp_GetArchiveSummary.sql" />
+    <None Include="StoredProcedures\usp_InitializeDatabase.sql" />
+    <None Include="StoredProcedures\usp_ManagePartitions.sql" />
+    <None Include="StoredProcedures\usp_PurgeExpiredArchives.sql" />
+    <None Include="StoredProcedures\qv_report.usp_GetShowplanXml.sql" />
+    <None Include="Views\qv_report.periods.sql" />
+    <None Include="Views\qv_report.query_period_metrics.sql" />
+    <None Include="Views\qv_report.period_metrics.sql" />
+    <None Include="Views\qv_report.wait_period_metrics.sql" />
+    <None Include="Views\qv_report.query_wait_period_metrics.sql" />
+    <None Include="Views\qv_report.query_plans.sql" />
 
 	<!-- Deployment Scripts (Not built, run manually) -->
 	<None Include="Scripts\Deploy.sql" />
@@ -97,6 +121,9 @@
 	<None Include="Tests\TestReportingContract.sql" />
 	<None Include="Security\ProvisionGrafanaReader.sql" />
 	<None Include="Security\ProvisionReportingSchema.sql" />
+	<None Include="Tests\TestPartitionSafetyGuards.sql" />
+	<None Include="Tests\TestProcedureCompilation.sql" />
+	<None Include="Tests\TestRepositoryContracts.ps1" />
 
 	<!-- SQL Agent Job Templates (Not built, run manually after deployment) -->
 	<None Include="Jobs\CreateArchiveJob_AllDatabases.sql" />
@@ -104,8 +131,8 @@
   </ItemGroup>
   <ItemGroup>
 	<!-- Partition Infrastructure -->
-	<Build Include="Partitions\PartitionFunction.sql" />
-	<Build Include="Partitions\PartitionScheme.sql" />
+    <Build Include="Partitions\DatabaseProject\PartitionFunction.sql" />
+    <Build Include="Partitions\DatabaseProject\PartitionScheme.sql" />
 
 	<!-- Core Metadata Tables -->
 	<Build Include="Tables\Core\DatabaseConfig.sql" />
@@ -128,20 +155,20 @@
 	<Build Include="Tables\PartitionMaintenance\query_store_wait_stats_PartitionMaintenance.sql" />
 
 	<!-- Stored Procedures -->
-	<Build Include="StoredProcedures\usp_ArchiveQueryStore.sql" />
-	<Build Include="StoredProcedures\usp_GetArchiveSummary.sql" />
-	<Build Include="StoredProcedures\usp_InitializeDatabase.sql" />
-	<Build Include="StoredProcedures\usp_ManagePartitions.sql" />
-	<Build Include="StoredProcedures\usp_PurgeExpiredArchives.sql" />
+    <Build Include="StoredProcedures\DatabaseProject\usp_ArchiveQueryStore.sql" />
+    <Build Include="StoredProcedures\DatabaseProject\usp_GetArchiveSummary.sql" />
+    <Build Include="StoredProcedures\DatabaseProject\usp_InitializeDatabase.sql" />
+    <Build Include="StoredProcedures\DatabaseProject\usp_ManagePartitions.sql" />
+    <Build Include="StoredProcedures\DatabaseProject\usp_PurgeExpiredArchives.sql" />
 
 	<!-- Stable reporting contract -->
 	<Build Include="Schemas\qv_report.sql" />
-	<Build Include="Views\qv_report.periods.sql" />
-	<Build Include="Views\qv_report.query_period_metrics.sql" />
-	<Build Include="Views\qv_report.period_metrics.sql" />
-	<Build Include="Views\qv_report.wait_period_metrics.sql" />
-	<Build Include="Views\qv_report.query_wait_period_metrics.sql" />
-	<Build Include="Views\qv_report.query_plans.sql" />
-	<Build Include="StoredProcedures\qv_report.usp_GetShowplanXml.sql" />
-	</ItemGroup>
+	<Build Include="Views\DatabaseProject\qv_report.periods.sql" />
+	<Build Include="Views\DatabaseProject\qv_report.query_period_metrics.sql" />
+	<Build Include="Views\DatabaseProject\qv_report.period_metrics.sql" />
+	<Build Include="Views\DatabaseProject\qv_report.wait_period_metrics.sql" />
+	<Build Include="Views\DatabaseProject\qv_report.query_wait_period_metrics.sql" />
+	<Build Include="Views\DatabaseProject\qv_report.query_plans.sql" />
+	<Build Include="StoredProcedures\DatabaseProject\qv_report.usp_GetShowplanXml.sql" />
+  </ItemGroup>
 </Project>

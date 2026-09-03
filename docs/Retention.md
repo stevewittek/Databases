@@ -49,6 +49,11 @@ Purging is destructive. Partition switch/truncate removes the six archived
 Query Store entity sets for the selected RunID, then deletes its metadata. A
 verified database backup is the recovery path.
 
+The integrated partition procedure refuses to switch or truncate a physical
+partition that contains another `RunID`, and direct operations own a transaction
+when the caller does not. A rejection indicates partition-boundary or legacy
+constraint work that must be reviewed; do not disable the guard.
+
 ## Reporting effect
 
 Purged periods disappear from `qv_report.periods` and Grafana variables. A

@@ -1,13 +1,4 @@
-/*
-	Stored Procedure: usp_GetArchiveSummary
-	Returns summary information about archived runs
-*/
-
-SET ANSI_NULLS ON;
-GO
-SET QUOTED_IDENTIFIER ON;
-GO
-CREATE OR ALTER PROCEDURE dbo.usp_GetArchiveSummary
+CREATE PROCEDURE dbo.usp_GetArchiveSummary
 	@SourceDatabaseName NVARCHAR(128) = NULL,
 	@RunID INT = NULL,
 	@StartDate DATETIME2(7) = NULL,
@@ -17,7 +8,7 @@ AS
 BEGIN
 	SET NOCOUNT ON;
 
-	SELECT 
+	SELECT
 		rm.RunID,
 		rm.RunName,
 		rm.SourceDatabaseName,
@@ -35,11 +26,11 @@ BEGIN
 		rm.RowsArchived_RuntimeStats,
 		rm.RowsArchived_RuntimeStatsInterval,
 		rm.RowsArchived_WaitStats,
-		(ISNULL(rm.RowsArchived_Query, 0) + 
-		 ISNULL(rm.RowsArchived_QueryText, 0) + 
-		 ISNULL(rm.RowsArchived_Plan, 0) + 
-		 ISNULL(rm.RowsArchived_RuntimeStats, 0) + 
-		 ISNULL(rm.RowsArchived_RuntimeStatsInterval, 0) + 
+		(ISNULL(rm.RowsArchived_Query, 0) +
+		 ISNULL(rm.RowsArchived_QueryText, 0) +
+		 ISNULL(rm.RowsArchived_Plan, 0) +
+		 ISNULL(rm.RowsArchived_RuntimeStats, 0) +
+		 ISNULL(rm.RowsArchived_RuntimeStatsInterval, 0) +
 		 ISNULL(rm.RowsArchived_WaitStats, 0)) AS TotalRowsArchived,
 		DATEDIFF(SECOND, rm.RunStartTime, ISNULL(rm.RunEndTime, SYSUTCDATETIME())) AS DurationSeconds,
 		rm.Comments,

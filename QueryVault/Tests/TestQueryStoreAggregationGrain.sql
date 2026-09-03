@@ -4,7 +4,9 @@
 	Microsoft documents that an active Query Store interval may expose multiple
 	runtime rows at (plan_id, execution_type, runtime_stats_interval_id) and
 	multiple wait rows at that grain plus wait_category. QueryVault avoids that
-	ambiguity by archiving only intervals older than one flush interval.
+	ambiguity by preferring intervals older than one flush interval and rejecting
+	repeated documented-grain rows before a new run can complete. Rejection is a
+	safety guard, not canonical source aggregation.
 */
 
 SET NOCOUNT ON;
@@ -17,6 +19,12 @@ IF OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P') IS NULL
 IF OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P') IS NULL
 	OR OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%i.end_time <= @EndDateTime%'
 	THROW 51101, 'Capture regression: completed interval end-time filter is missing.', 1;
+
+IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%GROUP BY plan_id, execution_type, runtime_stats_interval_id%'
+	THROW 51106, 'Capture regression: runtime duplicate-grain rejection guard is missing.', 1;
+
+IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%GROUP BY plan_id, runtime_stats_interval_id, execution_type, wait_category%'
+	THROW 51107, 'Capture regression: wait duplicate-grain rejection guard is missing.', 1;
 
 IF EXISTS
 (
@@ -74,4 +82,4 @@ HAVING MAX(i.end_time) > rm.EndDateTime
 ORDER BY rm.RunID;
 
 SELECT N'PASS' AS result,
-	N'Capture cutoff present; no duplicate documented-grain groups or orphaned interval references.' AS detail;
+	N'Capture cutoff and rejection guards present; no duplicate documented-grain groups or orphaned interval references.' AS detail;

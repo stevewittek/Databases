@@ -33,7 +33,9 @@ EXEC dbo.usp_ArchiveQueryStore
 
 The effective end is capped at one source Query Store flush interval before
 current UTC time. If the requested range contains no safely flushed interval,
-the procedure fails instead of capturing active data.
+the procedure fails. If runtime or wait rows still repeat the documented grain,
+the archive transaction is rejected rather than silently discarding a
+measurement. Canonical source aggregation remains planned.
 
 Use `@DoNotDelete = 1` for a deliberately protected baseline. QueryVault does
 not infer a period classification from `RunName`.
@@ -98,5 +100,7 @@ source configuration qualify. See [Retention](Retention.md).
 - Do not point reporting clients at `dbo` tables.
 - Do not use the nine known pre-safeguard Voyager2 periods as baselines without
   reviewing their interval boundaries.
+- A failed duplicate-grain capture is a correctness signal. Do not bypass the
+  guard with `DISTINCT` or delete one observation to force completion.
 - Do not put SQL or Grafana credentials in scripts, YAML committed to Git, or
   screenshots.

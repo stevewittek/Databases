@@ -3,10 +3,6 @@
 	Stores configuration for each database with QueryStore enabled
 */
 
-SET ANSI_NULLS ON;
-SET QUOTED_IDENTIFIER ON;
-GO
-
 CREATE TABLE dbo.DatabaseConfig
 (
 	ConfigID INT IDENTITY(1,1) NOT NULL,
@@ -49,11 +45,7 @@ CREATE TABLE dbo.DatabaseConfig
 	CONSTRAINT CK_DatabaseConfig_RetentionDays CHECK (DefaultRetentionDays > 0)
 );
 GO
-
 CREATE NONCLUSTERED INDEX IX_DatabaseConfig_Enabled 
 	ON dbo.DatabaseConfig(IsEnabled, NextRunDateTime) 
 	WHERE IsEnabled = 1;
-GO
-
-PRINT 'Table dbo.DatabaseConfig created successfully';
 GO

@@ -24,13 +24,9 @@ CREATE TABLE dbo.query_store_wait_stats
 	CONSTRAINT PK_query_store_wait_stats PRIMARY KEY NONCLUSTERED (RunID, wait_stats_id)
 ) ON PS_RunID(RunID);
 GO
-
 -- Clustered columnstore index
 CREATE CLUSTERED COLUMNSTORE INDEX CCI_query_store_wait_stats 
 	ON dbo.query_store_wait_stats
 	WITH (COMPRESSION_DELAY = 0 MINUTES)
 	ON PS_RunID(RunID);
-GO
-
-PRINT 'Table dbo.query_store_wait_stats created with partitioning and clustered columnstore index';
 GO

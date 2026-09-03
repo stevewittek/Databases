@@ -84,13 +84,9 @@ CREATE TABLE dbo.query_store_runtime_stats
 	CONSTRAINT PK_query_store_runtime_stats PRIMARY KEY NONCLUSTERED (RunID, runtime_stats_id)
 ) ON PS_RunID(RunID);
 GO
-
 -- Clustered columnstore index
 CREATE CLUSTERED COLUMNSTORE INDEX CCI_query_store_runtime_stats 
 	ON dbo.query_store_runtime_stats
 	WITH (COMPRESSION_DELAY = 0 MINUTES)
 	ON PS_RunID(RunID);
-GO
-
-PRINT 'Table dbo.query_store_runtime_stats created with partitioning and clustered columnstore index';
 GO

@@ -1,13 +1,4 @@
-/*
-	Stored Procedure: usp_PurgeExpiredArchives
-	Purges completed, unprotected archive runs after their configured retention date.
-*/
-
-SET ANSI_NULLS ON;
-GO
-SET QUOTED_IDENTIFIER ON;
-GO
-CREATE OR ALTER PROCEDURE dbo.usp_PurgeExpiredArchives
+CREATE PROCEDURE dbo.usp_PurgeExpiredArchives
 	@AsOfDateTime DATETIME2(7) = NULL,
 	@DryRun BIT = 0
 AS

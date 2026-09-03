@@ -1,0 +1,23 @@
+apiVersion: 1
+
+datasources:
+  - name: QueryVault SQL Server
+    uid: queryvault-mssql
+    type: mssql
+    access: proxy
+    url: $QV_SQLSERVER_HOST:$QV_SQLSERVER_PORT
+    user: $QV_GRAFANA_SQL_USER
+    isDefault: false
+    editable: false
+    version: 1
+    jsonData:
+      database: $QV_SQLSERVER_DATABASE
+      encrypt: "true"
+      tlsSkipVerify: false
+      maxOpenConns: 20
+      maxIdleConns: 5
+      maxIdleConnsAuto: true
+      connMaxLifetime: 14400
+      connectionTimeout: 15
+    secureJsonData:
+      password: $QV_GRAFANA_SQL_PASSWORD

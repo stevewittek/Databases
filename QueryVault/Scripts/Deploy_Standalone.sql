@@ -66,6 +66,8 @@ GO
 -- 4. Tables\QueryStore\*.sql
 -- 5. Tables\PartitionMaintenance\*.sql
 -- 6. StoredProcedures\*.sql
+-- 7. Schemas\qv_report.sql
+-- 8. Views\qv_report.*.sql, then StoredProcedures\qv_report.usp_GetShowplanXml.sql
 
 PRINT '========================================';
 PRINT 'To complete deployment, run the scripts in this order:';
@@ -76,6 +78,8 @@ PRINT '4. Tables\Core\DatabaseConfig.sql';
 PRINT '5. Tables\QueryStore\query_store_*.sql (6 files)';
 PRINT '6. Tables\PartitionMaintenance\query_store_*_PartitionMaintenance.sql (6 files)';
 PRINT '7. StoredProcedures\*.sql (4 files)';
+PRINT '8. Schemas\qv_report.sql';
+PRINT '9. Views\qv_report.*.sql, then StoredProcedures\qv_report.usp_GetShowplanXml.sql';
 PRINT '';
 PRINT 'Or run: Scripts\Deploy.sql from SQLCMD with -v "ProjectDir=<path>"';
 PRINT '========================================';

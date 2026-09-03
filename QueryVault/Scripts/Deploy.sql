@@ -173,7 +173,33 @@ GO
 GO
 
 -- ========================================
--- STEP 8: Deployment Summary
+-- STEP 8: Create qv_report Contract
+-- ========================================
+PRINT '';
+PRINT '========================================';
+PRINT 'STEP 8: Creating qv_report Contract';
+PRINT '========================================';
+GO
+
+:r "$(ProjectDir)Schemas\qv_report.sql"
+GO
+:r "$(ProjectDir)Views\qv_report.periods.sql"
+GO
+:r "$(ProjectDir)Views\qv_report.query_period_metrics.sql"
+GO
+:r "$(ProjectDir)Views\qv_report.period_metrics.sql"
+GO
+:r "$(ProjectDir)Views\qv_report.wait_period_metrics.sql"
+GO
+:r "$(ProjectDir)Views\qv_report.query_wait_period_metrics.sql"
+GO
+:r "$(ProjectDir)Views\qv_report.query_plans.sql"
+GO
+:r "$(ProjectDir)StoredProcedures\qv_report.usp_GetShowplanXml.sql"
+GO
+
+-- ========================================
+-- STEP 9: Deployment Summary
 -- ========================================
 PRINT '';
 PRINT '========================================';

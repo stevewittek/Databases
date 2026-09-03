@@ -1,0 +1,13 @@
+apiVersion: 1
+
+providers:
+  - name: QueryVault
+    orgId: 1
+    folder: QueryVault
+    folderUid: queryvault
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards/queryvault

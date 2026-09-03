@@ -69,6 +69,9 @@
     <Folder Include="Partitions" />
     <Folder Include="Scripts" />
     <Folder Include="StoredProcedures" />
+    <Folder Include="Schemas" />
+    <Folder Include="Views" />
+    <Folder Include="Security" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitkeep" />
@@ -94,6 +97,7 @@
     <None Include="SETUP_SUMMARY.md" />
     <None Include="FixBuildErrors.ps1" />
     <None Include="HOW_TO_FIX_BUILD_ERRORS.md" />
+    <None Include="Security\ProvisionGrafanaReader.sql" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="PartitionFunction.sql" />
@@ -149,5 +153,13 @@
     <Build Include="FixSQL2019Compatibility.sql" />
     <Build Include="CompleteSQL2019Fix.sql" />
     <Build Include="ups_ArchiveQueryStore.sql" />
+    <Build Include="Schemas\qv_report.sql" />
+    <Build Include="Views\qv_report.periods.sql" />
+    <Build Include="Views\qv_report.query_period_metrics.sql" />
+    <Build Include="Views\qv_report.period_metrics.sql" />
+    <Build Include="Views\qv_report.wait_period_metrics.sql" />
+    <Build Include="Views\qv_report.query_wait_period_metrics.sql" />
+    <Build Include="Views\qv_report.query_plans.sql" />
+    <Build Include="StoredProcedures\qv_report.usp_GetShowplanXml.sql" />
   </ItemGroup>
 </Project>

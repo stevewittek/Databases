@@ -1,0 +1,118 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {"title": "Overview", "type": "link", "url": "/d/queryvault-overview?var-source_server=${source_server}&var-source_database=${source_database}&var-archived_period=${comparison_period}"},
+    {"title": "Wait Analysis", "type": "link", "url": "/d/queryvault-wait-analysis?var-source_server=${source_server}&var-source_database=${source_database}&var-archived_period=${comparison_period}&var-baseline_period=${baseline_period}"}
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "value", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT 100.0 * (c.total_cpu_ms - b.total_cpu_ms) / NULLIF(b.total_cpu_ms, 0) AS cpu_delta_pct FROM qv_report.period_metrics b CROSS JOIN qv_report.period_metrics c WHERE b.period_id = ${baseline_period} AND c.period_id = ${comparison_period}", "refId": "A"}],
+      "title": "CPU Delta",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT 100.0 * (c.total_duration_ms - b.total_duration_ms) / NULLIF(b.total_duration_ms, 0) AS duration_delta_pct FROM qv_report.period_metrics b CROSS JOIN qv_report.period_metrics c WHERE b.period_id = ${baseline_period} AND c.period_id = ${comparison_period}", "refId": "A"}],
+      "title": "Duration Delta",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT 100.0 * (c.total_logical_reads - b.total_logical_reads) / NULLIF(b.total_logical_reads, 0) AS reads_delta_pct FROM qv_report.period_metrics b CROSS JOIN qv_report.period_metrics c WHERE b.period_id = ${baseline_period} AND c.period_id = ${comparison_period}", "refId": "A"}],
+      "title": "Logical-read Delta",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "id": 4,
+      "options": {"colorMode": "value", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT 100.0 * (c.execution_count - b.execution_count) / NULLIF(CONVERT(DECIMAL(38,4), b.execution_count), 0) AS execution_delta_pct FROM qv_report.period_metrics b CROSS JOIN qv_report.period_metrics c WHERE b.period_id = ${baseline_period} AND c.period_id = ${comparison_period}", "refId": "A"}],
+      "title": "Execution Delta",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 7, "w": 24, "x": 0, "y": 4},
+      "id": 5,
+      "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT metric, baseline_value, comparison_value, comparison_value - baseline_value AS absolute_delta, 100.0 * (comparison_value - baseline_value) / NULLIF(baseline_value, 0) AS delta_pct FROM (SELECT 'Executions' metric, CONVERT(DECIMAL(38,4), b.execution_count) baseline_value, CONVERT(DECIMAL(38,4), c.execution_count) comparison_value FROM qv_report.period_metrics b CROSS JOIN qv_report.period_metrics c WHERE b.period_id = ${baseline_period} AND c.period_id = ${comparison_period} UNION ALL SELECT 'CPU (ms)', b.total_cpu_ms, c.total_cpu_ms FROM qv_report.period_metrics b CROSS JOIN qv_report.period_metrics c WHERE b.period_id = ${baseline_period} AND c.period_id = ${comparison_period} UNION ALL SELECT 'Duration (ms)', b.total_duration_ms, c.total_duration_ms FROM qv_report.period_metrics b CROSS JOIN qv_report.period_metrics c WHERE b.period_id = ${baseline_period} AND c.period_id = ${comparison_period} UNION ALL SELECT 'Logical reads', b.total_logical_reads, c.total_logical_reads FROM qv_report.period_metrics b CROSS JOIN qv_report.period_metrics c WHERE b.period_id = ${baseline_period} AND c.period_id = ${comparison_period}) d", "refId": "A"}],
+      "title": "Workload Changes",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 10, "w": 12, "x": 0, "y": 11},
+      "id": 6,
+      "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "WITH b AS (SELECT * FROM qv_report.query_period_metrics WHERE period_id = ${baseline_period}), c AS (SELECT * FROM qv_report.query_period_metrics WHERE period_id = ${comparison_period}) SELECT TOP (20) COALESCE(c.query_id, b.query_id) query_id, COALESCE(c.query_text_preview, b.query_text_preview) query_text_preview, COALESCE(b.total_duration_ms, 0) baseline_duration_ms, COALESCE(c.total_duration_ms, 0) comparison_duration_ms, COALESCE(c.total_duration_ms, 0) - COALESCE(b.total_duration_ms, 0) duration_delta_ms, COALESCE(c.total_cpu_ms, 0) - COALESCE(b.total_cpu_ms, 0) cpu_delta_ms, COALESCE(c.total_logical_reads, 0) - COALESCE(b.total_logical_reads, 0) reads_delta, COALESCE(c.execution_count, 0) - COALESCE(b.execution_count, 0) execution_delta FROM b FULL OUTER JOIN c ON c.query_id = b.query_id WHERE COALESCE(c.total_duration_ms, 0) - COALESCE(b.total_duration_ms, 0) > 0 ORDER BY duration_delta_ms DESC", "refId": "A"}],
+      "title": "Top Regressed Queries (total duration)",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 10, "w": 12, "x": 12, "y": 11},
+      "id": 7,
+      "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "WITH b AS (SELECT * FROM qv_report.query_period_metrics WHERE period_id = ${baseline_period}), c AS (SELECT * FROM qv_report.query_period_metrics WHERE period_id = ${comparison_period}) SELECT TOP (20) COALESCE(c.query_id, b.query_id) query_id, COALESCE(c.query_text_preview, b.query_text_preview) query_text_preview, COALESCE(b.total_duration_ms, 0) baseline_duration_ms, COALESCE(c.total_duration_ms, 0) comparison_duration_ms, COALESCE(c.total_duration_ms, 0) - COALESCE(b.total_duration_ms, 0) duration_delta_ms, COALESCE(c.total_cpu_ms, 0) - COALESCE(b.total_cpu_ms, 0) cpu_delta_ms, COALESCE(c.total_logical_reads, 0) - COALESCE(b.total_logical_reads, 0) reads_delta, COALESCE(c.execution_count, 0) - COALESCE(b.execution_count, 0) execution_delta FROM b FULL OUTER JOIN c ON c.query_id = b.query_id WHERE COALESCE(c.total_duration_ms, 0) - COALESCE(b.total_duration_ms, 0) < 0 ORDER BY duration_delta_ms ASC", "refId": "A"}],
+      "title": "Top Improved Queries (total duration)",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 9, "w": 10, "x": 0, "y": 21},
+      "id": 8,
+      "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "WITH b AS (SELECT query_id, plan_count FROM qv_report.query_period_metrics WHERE period_id = ${baseline_period}), c AS (SELECT query_id, plan_count FROM qv_report.query_period_metrics WHERE period_id = ${comparison_period}) SELECT COALESCE(c.query_id, b.query_id) query_id, COALESCE(b.plan_count, 0) baseline_plan_count, COALESCE(c.plan_count, 0) comparison_plan_count, COALESCE(c.plan_count, 0) - COALESCE(b.plan_count, 0) plan_count_delta FROM b FULL OUTER JOIN c ON c.query_id = b.query_id WHERE COALESCE(c.plan_count, 0) <> COALESCE(b.plan_count, 0) ORDER BY ABS(COALESCE(c.plan_count, 0) - COALESCE(b.plan_count, 0)) DESC", "refId": "A"}],
+      "title": "Plan Changes",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 9, "w": 14, "x": 10, "y": 21},
+      "id": 9,
+      "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "WITH b AS (SELECT wait_category, wait_category_desc, total_wait_ms FROM qv_report.wait_period_metrics WHERE period_id = ${baseline_period}), c AS (SELECT wait_category, wait_category_desc, total_wait_ms FROM qv_report.wait_period_metrics WHERE period_id = ${comparison_period}) SELECT COALESCE(c.wait_category_desc, b.wait_category_desc) wait_category, COALESCE(b.total_wait_ms, 0) baseline_wait_ms, COALESCE(c.total_wait_ms, 0) comparison_wait_ms, COALESCE(c.total_wait_ms, 0) - COALESCE(b.total_wait_ms, 0) wait_delta_ms, 100.0 * (COALESCE(c.total_wait_ms, 0) - COALESCE(b.total_wait_ms, 0)) / NULLIF(b.total_wait_ms, 0) delta_pct FROM b FULL OUTER JOIN c ON c.wait_category = b.wait_category ORDER BY ABS(COALESCE(c.total_wait_ms, 0) - COALESCE(b.total_wait_ms, 0)) DESC", "refId": "A"}],
+      "title": "Wait-category Changes",
+      "type": "table"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["QueryVault", "SQL Server", "Query Store"],
+  "templating": {
+    "list": [
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT DISTINCT source_server_name AS __text, source_server_name AS __value FROM qv_report.periods ORDER BY source_server_name", "hide": 0, "includeAll": false, "label": "Source server", "multi": false, "name": "source_server", "options": [], "query": "SELECT DISTINCT source_server_name AS __text, source_server_name AS __value FROM qv_report.periods ORDER BY source_server_name", "refresh": 1, "sort": 1, "type": "query"},
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT DISTINCT source_database_name AS __text, source_database_name AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} ORDER BY source_database_name", "hide": 0, "includeAll": false, "label": "Source database", "multi": false, "name": "source_database", "options": [], "query": "SELECT DISTINCT source_database_name AS __text, source_database_name AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} ORDER BY source_database_name", "refresh": 1, "sort": 1, "type": "query"},
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT CONCAT(period_name, ' | ', CONVERT(VARCHAR(19), period_start_utc, 120), ' - ', CONVERT(VARCHAR(19), period_end_utc, 120)) AS __text, CAST(period_id AS VARCHAR(20)) AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} AND period_status = 'Completed' ORDER BY period_end_utc DESC", "hide": 0, "includeAll": false, "label": "Baseline period", "multi": false, "name": "baseline_period", "options": [], "query": "SELECT CONCAT(period_name, ' | ', CONVERT(VARCHAR(19), period_start_utc, 120), ' - ', CONVERT(VARCHAR(19), period_end_utc, 120)) AS __text, CAST(period_id AS VARCHAR(20)) AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} AND period_status = 'Completed' ORDER BY period_end_utc DESC", "refresh": 1, "sort": 0, "type": "query"},
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT CONCAT(period_name, ' | ', CONVERT(VARCHAR(19), period_start_utc, 120), ' - ', CONVERT(VARCHAR(19), period_end_utc, 120)) AS __text, CAST(period_id AS VARCHAR(20)) AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} AND period_status = 'Completed' ORDER BY period_end_utc DESC", "hide": 0, "includeAll": false, "label": "Comparison period", "multi": false, "name": "comparison_period", "options": [], "query": "SELECT CONCAT(period_name, ' | ', CONVERT(VARCHAR(19), period_start_utc, 120), ' - ', CONVERT(VARCHAR(19), period_end_utc, 120)) AS __text, CAST(period_id AS VARCHAR(20)) AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} AND period_status = 'Completed' ORDER BY period_end_utc DESC", "refresh": 1, "sort": 0, "type": "query"}
+    ]
+  },
+  "time": {"from": "now-30d", "to": "now"},
+  "timezone": "utc",
+  "title": "QueryVault Period Comparison",
+  "uid": "queryvault-period-comparison",
+  "version": 1
+}

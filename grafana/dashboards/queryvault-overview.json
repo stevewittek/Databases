@@ -1,0 +1,119 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {"title": "Period Comparison", "type": "link", "url": "/d/queryvault-period-comparison?var-source_server=${source_server}&var-source_database=${source_database}&var-baseline_period=${archived_period}&var-comparison_period=${archived_period}"},
+    {"title": "Wait Analysis", "type": "link", "url": "/d/queryvault-wait-analysis?var-source_server=${source_server}&var-source_database=${source_database}&var-archived_period=${archived_period}"}
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT execution_count FROM qv_report.period_metrics WHERE period_id = ${archived_period}", "refId": "A"}],
+      "title": "Executions",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT total_cpu_ms FROM qv_report.period_metrics WHERE period_id = ${archived_period}", "refId": "A"}],
+      "title": "Total CPU",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT total_duration_ms FROM qv_report.period_metrics WHERE period_id = ${archived_period}", "refId": "A"}],
+      "title": "Total Duration",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "id": 4,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT total_logical_reads FROM qv_report.period_metrics WHERE period_id = ${archived_period}", "refId": "A"}],
+      "title": "Logical Reads",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 0},
+      "id": 5,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT query_count FROM qv_report.period_metrics WHERE period_id = ${archived_period}", "refId": "A"}],
+      "title": "Queries",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 0},
+      "id": 6,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT plan_count FROM qv_report.period_metrics WHERE period_id = ${archived_period}", "refId": "A"}],
+      "title": "Plans",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "gridPos": {"h": 9, "w": 16, "x": 0, "y": 4},
+      "id": 7,
+      "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT period_id, period_name, COALESCE(period_classification, 'Unclassified (not recorded)') AS classification, period_start_utc, period_end_utc, period_status, is_protected, archived_total_rows FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} ORDER BY period_end_utc DESC", "refId": "A"}],
+      "title": "Available Archived Periods",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 9, "w": 8, "x": 16, "y": 4},
+      "id": 8,
+      "options": {"displayLabels": ["name", "percent"], "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}, "pieType": "donut", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": true}},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT COALESCE(period_classification, 'Unclassified (not recorded)') AS metric, COUNT_BIG(*) AS value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} GROUP BY period_classification", "refId": "A"}],
+      "title": "Period Classifications",
+      "type": "piechart"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 13},
+      "id": 9,
+      "options": {"legend": {"displayMode": "table", "placement": "right", "showLegend": true}, "orientation": "horizontal", "showValue": "always"},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT TOP (12) wait_category_desc AS metric, total_wait_ms AS value FROM qv_report.wait_period_metrics WHERE period_id = ${archived_period} ORDER BY total_wait_ms DESC", "refId": "A"}],
+      "title": "Major Wait Categories",
+      "type": "barchart"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["QueryVault", "SQL Server", "Query Store"],
+  "templating": {
+    "list": [
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT DISTINCT source_server_name AS __text, source_server_name AS __value FROM qv_report.periods ORDER BY source_server_name", "hide": 0, "includeAll": false, "label": "Source server", "multi": false, "name": "source_server", "options": [], "query": "SELECT DISTINCT source_server_name AS __text, source_server_name AS __value FROM qv_report.periods ORDER BY source_server_name", "refresh": 1, "regex": "", "skipUrlSync": false, "sort": 1, "type": "query"},
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT DISTINCT source_database_name AS __text, source_database_name AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} ORDER BY source_database_name", "hide": 0, "includeAll": false, "label": "Source database", "multi": false, "name": "source_database", "options": [], "query": "SELECT DISTINCT source_database_name AS __text, source_database_name AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} ORDER BY source_database_name", "refresh": 1, "regex": "", "skipUrlSync": false, "sort": 1, "type": "query"},
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT CONCAT(period_name, ' | ', CONVERT(VARCHAR(19), period_start_utc, 120), ' - ', CONVERT(VARCHAR(19), period_end_utc, 120)) AS __text, CAST(period_id AS VARCHAR(20)) AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} AND period_status = 'Completed' ORDER BY period_end_utc DESC", "hide": 0, "includeAll": false, "label": "Archived period", "multi": false, "name": "archived_period", "options": [], "query": "SELECT CONCAT(period_name, ' | ', CONVERT(VARCHAR(19), period_start_utc, 120), ' - ', CONVERT(VARCHAR(19), period_end_utc, 120)) AS __text, CAST(period_id AS VARCHAR(20)) AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} AND period_status = 'Completed' ORDER BY period_end_utc DESC", "refresh": 1, "regex": "", "skipUrlSync": false, "sort": 0, "type": "query"}
+    ]
+  },
+  "time": {"from": "now-30d", "to": "now"},
+  "timezone": "utc",
+  "title": "QueryVault Overview",
+  "uid": "queryvault-overview",
+  "version": 1,
+  "weekStart": ""
+}

@@ -1,0 +1,79 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {"title": "Overview", "type": "link", "url": "/d/queryvault-overview?var-source_server=${source_server}&var-source_database=${source_database}&var-archived_period=${archived_period}"},
+    {"title": "Period Comparison", "type": "link", "url": "/d/queryvault-period-comparison?var-source_server=${source_server}&var-source_database=${source_database}&var-baseline_period=${baseline_period}&var-comparison_period=${archived_period}"}
+  ],
+  "panels": [
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"colorMode": "value", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT SUM(total_wait_ms) AS selected_wait_ms FROM qv_report.wait_period_metrics WHERE period_id = ${archived_period} AND wait_category IN (${wait_category:csv})", "refId": "A"}],
+      "title": "Selected Wait Time",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "id": 2,
+      "options": {"colorMode": "value", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "WITH b AS (SELECT SUM(total_wait_ms) total_wait_ms FROM qv_report.wait_period_metrics WHERE period_id = ${baseline_period} AND wait_category IN (${wait_category:csv})), c AS (SELECT SUM(total_wait_ms) total_wait_ms FROM qv_report.wait_period_metrics WHERE period_id = ${archived_period} AND wait_category IN (${wait_category:csv})) SELECT 100.0 * (c.total_wait_ms - b.total_wait_ms) / NULLIF(b.total_wait_ms, 0) AS change_pct FROM b CROSS JOIN c", "refId": "A"}],
+      "title": "Change vs Baseline",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 11, "w": 12, "x": 0, "y": 4},
+      "id": 3,
+      "options": {"displayLabels": ["name", "percent"], "legend": {"displayMode": "table", "placement": "right", "showLegend": true}, "pieType": "donut", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": true}},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT wait_category_desc AS metric, total_wait_ms AS value FROM qv_report.wait_period_metrics WHERE period_id = ${archived_period} AND wait_category IN (${wait_category:csv}) ORDER BY total_wait_ms DESC", "refId": "A"}],
+      "title": "Wait Category Distribution",
+      "type": "piechart"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 11, "w": 12, "x": 12, "y": 4},
+      "id": 4,
+      "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "WITH b AS (SELECT wait_category, wait_category_desc, total_wait_ms FROM qv_report.wait_period_metrics WHERE period_id = ${baseline_period}), c AS (SELECT wait_category, wait_category_desc, total_wait_ms FROM qv_report.wait_period_metrics WHERE period_id = ${archived_period}) SELECT COALESCE(c.wait_category_desc, b.wait_category_desc) wait_category, COALESCE(b.total_wait_ms, 0) baseline_wait_ms, COALESCE(c.total_wait_ms, 0) selected_wait_ms, COALESCE(c.total_wait_ms, 0) - COALESCE(b.total_wait_ms, 0) delta_ms, 100.0 * (COALESCE(c.total_wait_ms, 0) - COALESCE(b.total_wait_ms, 0)) / NULLIF(b.total_wait_ms, 0) delta_pct FROM b FULL OUTER JOIN c ON c.wait_category = b.wait_category WHERE COALESCE(c.wait_category, b.wait_category) IN (${wait_category:csv}) ORDER BY ABS(COALESCE(c.total_wait_ms, 0) - COALESCE(b.total_wait_ms, 0)) DESC", "refId": "A"}],
+      "title": "Wait Change vs Baseline",
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "mssql", "uid": "queryvault-mssql"},
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "gridPos": {"h": 12, "w": 24, "x": 0, "y": 15},
+      "id": 5,
+      "options": {"cellHeight": "sm", "footer": {"show": false}, "showHeader": true},
+      "targets": [{"format": "table", "rawQuery": true, "rawSql": "SELECT TOP (50) query_id, query_hash_hex, query_text_preview, SUM(total_wait_ms) AS total_wait_ms, MAX(max_query_wait_time_ms) AS max_query_wait_time_ms FROM qv_report.query_wait_period_metrics WHERE period_id = ${archived_period} AND wait_category IN (${wait_category:csv}) GROUP BY query_id, query_hash_hex, query_text_preview ORDER BY total_wait_ms DESC", "refId": "A"}],
+      "title": "Top Queries Contributing to Selected Waits",
+      "type": "table"
+    }
+  ],
+  "refresh": "",
+  "schemaVersion": 39,
+  "tags": ["QueryVault", "SQL Server", "Query Store", "Waits"],
+  "templating": {
+    "list": [
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT DISTINCT source_server_name AS __text, source_server_name AS __value FROM qv_report.periods ORDER BY source_server_name", "hide": 0, "includeAll": false, "label": "Source server", "multi": false, "name": "source_server", "options": [], "query": "SELECT DISTINCT source_server_name AS __text, source_server_name AS __value FROM qv_report.periods ORDER BY source_server_name", "refresh": 1, "sort": 1, "type": "query"},
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT DISTINCT source_database_name AS __text, source_database_name AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} ORDER BY source_database_name", "hide": 0, "includeAll": false, "label": "Source database", "multi": false, "name": "source_database", "options": [], "query": "SELECT DISTINCT source_database_name AS __text, source_database_name AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} ORDER BY source_database_name", "refresh": 1, "sort": 1, "type": "query"},
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT CONCAT(period_name, ' | ', CONVERT(VARCHAR(19), period_start_utc, 120), ' - ', CONVERT(VARCHAR(19), period_end_utc, 120)) AS __text, CAST(period_id AS VARCHAR(20)) AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} AND period_status = 'Completed' ORDER BY period_end_utc DESC", "hide": 0, "includeAll": false, "label": "Archived period", "multi": false, "name": "archived_period", "options": [], "query": "SELECT CONCAT(period_name, ' | ', CONVERT(VARCHAR(19), period_start_utc, 120), ' - ', CONVERT(VARCHAR(19), period_end_utc, 120)) AS __text, CAST(period_id AS VARCHAR(20)) AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} AND period_status = 'Completed' ORDER BY period_end_utc DESC", "refresh": 1, "sort": 0, "type": "query"},
+      {"current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT CONCAT(period_name, ' | ', CONVERT(VARCHAR(19), period_start_utc, 120), ' - ', CONVERT(VARCHAR(19), period_end_utc, 120)) AS __text, CAST(period_id AS VARCHAR(20)) AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} AND period_status = 'Completed' ORDER BY period_end_utc DESC", "hide": 0, "includeAll": false, "label": "Baseline period", "multi": false, "name": "baseline_period", "options": [], "query": "SELECT CONCAT(period_name, ' | ', CONVERT(VARCHAR(19), period_start_utc, 120), ' - ', CONVERT(VARCHAR(19), period_end_utc, 120)) AS __text, CAST(period_id AS VARCHAR(20)) AS __value FROM qv_report.periods WHERE source_server_name = ${source_server:sqlstring} AND source_database_name = ${source_database:sqlstring} AND period_status = 'Completed' ORDER BY period_end_utc DESC", "refresh": 1, "sort": 0, "type": "query"},
+      {"allValue": null, "current": {}, "datasource": {"type": "mssql", "uid": "queryvault-mssql"}, "definition": "SELECT wait_category_desc AS __text, CAST(wait_category AS VARCHAR(10)) AS __value FROM qv_report.wait_period_metrics WHERE period_id = ${archived_period} ORDER BY total_wait_ms DESC", "hide": 0, "includeAll": true, "label": "Wait category", "multi": true, "name": "wait_category", "options": [], "query": "SELECT wait_category_desc AS __text, CAST(wait_category AS VARCHAR(10)) AS __value FROM qv_report.wait_period_metrics WHERE period_id = ${archived_period} ORDER BY total_wait_ms DESC", "refresh": 1, "sort": 0, "type": "query"}
+    ]
+  },
+  "time": {"from": "now-30d", "to": "now"},
+  "timezone": "utc",
+  "title": "QueryVault Wait Analysis",
+  "uid": "queryvault-wait-analysis",
+  "version": 1
+}

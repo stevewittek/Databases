@@ -72,6 +72,8 @@ The archive covers these major Query Store entities:
 
 Start with the [detailed QueryVault documentation](QueryVault/README.md) for commands and examples.
 
+For the supported Grafana OSS reporting integration, see the [reporting plan](docs/GRAFANA_REPORTING_PLAN.md) and [Grafana setup guide](docs/Grafana-Setup.md). Visualization queries use the stable `qv_report` schema rather than QueryVault's internal tables.
+
 ## Requirements
 
 - SQL Server 2016 or later

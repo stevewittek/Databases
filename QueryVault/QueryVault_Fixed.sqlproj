@@ -67,6 +67,9 @@
 	<Folder Include="Partitions" />
 	<Folder Include="Scripts" />
 	<Folder Include="StoredProcedures" />
+	<Folder Include="Schemas" />
+	<Folder Include="Views" />
+	<Folder Include="Security" />
   </ItemGroup>
   <ItemGroup>
 	<!-- Documentation and Helper Files -->
@@ -89,6 +92,7 @@
 	<None Include="Scripts\Voyager2_SmokeWorkload_StackOverflow.sql" />
 	<None Include="Scripts\Voyager2_SmokeWorkload_WideWorldImporters.sql" />
 	<None Include="Tests\TestPurgeExpiredArchives.sql" />
+	<None Include="Security\ProvisionGrafanaReader.sql" />
 
 	<!-- SQL Agent Job Templates (Not built, run manually after deployment) -->
 	<None Include="Jobs\CreateArchiveJob_AllDatabases.sql" />
@@ -125,5 +129,15 @@
 	<Build Include="StoredProcedures\usp_InitializeDatabase.sql" />
 	<Build Include="StoredProcedures\usp_ManagePartitions.sql" />
 	<Build Include="StoredProcedures\usp_PurgeExpiredArchives.sql" />
-  </ItemGroup>
+
+	<!-- Stable reporting contract -->
+	<Build Include="Schemas\qv_report.sql" />
+	<Build Include="Views\qv_report.periods.sql" />
+	<Build Include="Views\qv_report.query_period_metrics.sql" />
+	<Build Include="Views\qv_report.period_metrics.sql" />
+	<Build Include="Views\qv_report.wait_period_metrics.sql" />
+	<Build Include="Views\qv_report.query_wait_period_metrics.sql" />
+	<Build Include="Views\qv_report.query_plans.sql" />
+	<Build Include="StoredProcedures\qv_report.usp_GetShowplanXml.sql" />
+	</ItemGroup>
 </Project>

@@ -31,7 +31,6 @@ BEGIN
 	DECLARE @ActualRetentionDays INT;
 	DECLARE @RowCount BIGINT;
 	DECLARE @CompressionDelay INT;
-	DECLARE @PartitionsToAdd INT;
 	DECLARE @RuntimeContributorRows BIGINT;
 	DECLARE @WaitContributorRows BIGINT;
 	DECLARE @RuntimeReplicaGroupProjection NVARCHAR(128);
@@ -125,27 +124,12 @@ BEGIN
 		SET @RunID = SCOPE_IDENTITY();
 		PRINT 'Created RunID: ' + CAST(@RunID AS VARCHAR(20));
 
-		-- Check if we need to add more partitions
-		DECLARE @MaxRunIDInFunction INT;
-		SELECT @MaxRunIDInFunction = ISNULL(MAX(CAST(value AS INT)), 0)
-		FROM sys.partition_range_values prv
-		INNER JOIN sys.partition_functions pf ON pf.function_id = prv.function_id
-		WHERE pf.name = 'PF_RunID';
-
-		IF @RunID > @MaxRunIDInFunction
-		BEGIN
-			PRINT 'Extending partition function to accommodate new RunID';
-			-- Add enough boundaries to isolate this RunID even after an identity
-			-- jump. A fixed ten-boundary extension can leave the new run sharing
-			-- the overflow partition with older runs, making a later switch unsafe.
-			SET @PartitionsToAdd = @RunID - @MaxRunIDInFunction;
-			IF @PartitionsToAdd < 10
-				SET @PartitionsToAdd = 10;
-
-			EXEC dbo.usp_ManagePartitions 
-				@Operation = 'AddPartition',
-				@NewPartitionCount = @PartitionsToAdd;
-		END
+		-- Allocate exactly this immutable archive RunID and an empty future
+		-- partition. Identity gaps never allocate intermediate boundaries.
+		EXEC dbo.usp_ManagePartitions
+			@Operation = N'EnsureRunPartition',
+			@RunID = @RunID,
+			@ConfigID = @ConfigID;
 
 		-- Keep the run metadata outside the archive transaction so failures remain visible.
 		BEGIN TRANSACTION;

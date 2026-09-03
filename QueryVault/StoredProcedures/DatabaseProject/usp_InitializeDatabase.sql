@@ -7,6 +7,9 @@ CREATE PROCEDURE dbo.usp_InitializeDatabase
 	@CompressionDelayMinutes INT = 0,
 	@DefaultRetentionDays INT = 365,
 	@AutoDeleteEnabled BIT = 0,
+	@MaxRetainedRuns INT = 1000,
+	@PartitionWarningPct TINYINT = 80,
+	@StorageMode NVARCHAR(20) = N'AUTO',
 	@Comments NVARCHAR(MAX) = NULL
 AS
 BEGIN
@@ -14,6 +17,17 @@ BEGIN
 
 	DECLARE @ErrorMessage NVARCHAR(4000);
 	DECLARE @ConfigID INT;
+
+	SET @StorageMode = UPPER(LTRIM(RTRIM(@StorageMode)));
+
+	IF @MaxRetainedRuns IS NULL OR @MaxRetainedRuns < 1 OR @MaxRetainedRuns > 14990
+		THROW 51040, 'MaxRetainedRuns must be between 1 and 14990.', 1;
+
+	IF @PartitionWarningPct IS NULL OR @PartitionWarningPct < 50 OR @PartitionWarningPct > 95
+		THROW 51041, 'PartitionWarningPct must be between 50 and 95.', 1;
+
+	IF @StorageMode IS NULL OR @StorageMode NOT IN (N'AUTO', N'ROWSTORE', N'COLUMNSTORE')
+		THROW 51042, 'StorageMode must be AUTO, ROWSTORE, or COLUMNSTORE.', 1;
 
 	BEGIN TRY
 		-- Default to current server if not specified
@@ -38,6 +52,9 @@ BEGIN
 				CompressionDelayMinutes = @CompressionDelayMinutes,
 				DefaultRetentionDays = @DefaultRetentionDays,
 				AutoDeleteEnabled = @AutoDeleteEnabled,
+				MaxRetainedRuns = @MaxRetainedRuns,
+				PartitionWarningPct = @PartitionWarningPct,
+				StorageMode = @StorageMode,
 				Comments = ISNULL(@Comments, Comments),
 				ModifiedDate = SYSUTCDATETIME(),
 				ModifiedBy = SUSER_SNAME(),
@@ -61,6 +78,9 @@ BEGIN
 				CompressionDelayMinutes,
 				DefaultRetentionDays,
 				AutoDeleteEnabled,
+				MaxRetainedRuns,
+				PartitionWarningPct,
+				StorageMode,
 				Comments
 			)
 			VALUES
@@ -74,6 +94,9 @@ BEGIN
 				@CompressionDelayMinutes,
 				@DefaultRetentionDays,
 				@AutoDeleteEnabled,
+				@MaxRetainedRuns,
+				@PartitionWarningPct,
+				@StorageMode,
 				@Comments
 			);
 
@@ -93,6 +116,9 @@ BEGIN
 			CompressionDelayMinutes,
 			DefaultRetentionDays,
 			AutoDeleteEnabled,
+			MaxRetainedRuns,
+			PartitionWarningPct,
+			StorageMode,
 			Comments,
 			CreatedDate,
 			ModifiedDate

@@ -20,6 +20,8 @@ GO
 BEGIN TRANSACTION;
 GO
 
+:r ..\Scripts\MigrateRunPartitioning.sql
+:r ..\Functions\ufn_EvaluatePartitionCapacity.sql
 :r ..\Tables\QueryStore\query_store_runtime_stats_contributor.sql
 :r ..\Tables\QueryStore\query_store_runtime_stats_canonical.sql
 :r ..\Tables\QueryStore\query_store_wait_stats_contributor.sql
@@ -29,6 +31,9 @@ GO
 :r ..\Tables\PartitionMaintenance\query_store_wait_stats_contributor_PartitionMaintenance.sql
 :r ..\Tables\PartitionMaintenance\query_store_wait_stats_canonical_PartitionMaintenance.sql
 :r ..\StoredProcedures\usp_ManagePartitions.sql
+GO
+
+SET XACT_ABORT OFF;
 GO
 
 BEGIN TRY

@@ -11,7 +11,10 @@ EXEC dbo.usp_InitializeDatabase
     @ScheduleType = N'Daily',
     @ScheduleTime = '02:00:00',
     @DefaultRetentionDays = 365,
-    @AutoDeleteEnabled = 0;
+    @AutoDeleteEnabled = 0,
+    @MaxRetainedRuns = 1000,
+    @PartitionWarningPct = 80,
+    @StorageMode = N'AUTO';
 ```
 
 The source database must be on the same SQL Server instance for the current
@@ -33,9 +36,9 @@ EXEC dbo.usp_ArchiveQueryStore
 
 The effective end is capped at one source Query Store flush interval before
 current UTC time. If the requested range contains no safely flushed interval,
-the procedure fails. If runtime or wait rows still repeat the documented grain,
-the archive transaction is rejected rather than silently discarding a
-measurement. Canonical source aggregation remains planned.
+the procedure fails. Every native runtime/wait contributor is retained, then
+materialized to the documented Query Store grain before reporting; repeated
+native rows are not silently discarded or treated as complete observations.
 
 Use `@DoNotDelete = 1` for a deliberately protected baseline. QueryVault does
 not infer a period classification from `RunName`.
@@ -92,7 +95,36 @@ EXEC dbo.usp_PurgeExpiredArchives @DryRun = 1;
 
 Review the result before running with `@DryRun = 0`. Only completed,
 unprotected periods with an expired retention date and an auto-delete-enabled
-source configuration qualify. See [Retention](Retention.md).
+source configuration qualify. Purge switches and truncates all run-owned data,
+deletes the period metadata, then merges its obsolete RunID boundary. See
+[Retention](Retention.md).
+
+## Partition and storage capacity
+
+Inspect current logical and physical capacity without changing it:
+
+```sql
+EXEC dbo.usp_ManagePartitions
+    @Operation = N'GetInfo',
+    @ConfigID = 1;
+```
+
+`MaxRetainedRuns` applies to retained runs for a configured source, not to the
+numeric RunID. QueryVault also protects a global physical fanout of 14,990,
+leaving ten partitions below SQL Server's hard 15,000 limit. Do not use
+`partition_number` as an ID; boundary merges can renumber partitions.
+
+Storage advice is read-only and evaluates runtime and wait facts separately:
+
+```sql
+SELECT *
+FROM dbo.vw_QueryVaultStorageRecommendation
+ORDER BY ConfigID, FactType;
+```
+
+`AUTO` may recommend rowstore for small histories and columnstore for larger
+ones. The view does not convert storage, and `COLUMNSTORE_ARCHIVE` remains a
+separate future cold-tier evaluation.
 
 ## Operational rules
 
@@ -100,7 +132,10 @@ source configuration qualify. See [Retention](Retention.md).
 - Do not point reporting clients at `dbo` tables.
 - Do not use the nine known pre-safeguard Voyager2 periods as baselines without
   reviewing their interval boundaries.
-- A failed duplicate-grain capture is a correctness signal. Do not bypass the
-  guard with `DISTINCT` or delete one observation to force completion.
+- Never use `DISTINCT` or an arbitrary native statistic row to collapse a
+  repeated Query Store grain; retain contributors and use canonical facts.
+- If allocation reports nonempty legacy overflow data, stop and plan a reviewed
+  migration. Do not disable the guard or split a populated columnstore
+  partition in place.
 - Do not put SQL or Grafana credentials in scripts, YAML committed to Git, or
   screenshots.

@@ -53,6 +53,7 @@ $deploymentSteps = @(
 	@{ Name = "Partition Scheme"; Path = "Partitions/PartitionScheme.sql"; Kind = "Always" },
 	@{ Name = "RunMetadata Table"; Path = "Tables/Core/RunMetadata.sql"; Kind = "Table"; Object = "RunMetadata" },
 	@{ Name = "DatabaseConfig Table"; Path = "Tables/Core/DatabaseConfig.sql"; Kind = "Table"; Object = "DatabaseConfig" },
+	@{ Name = "Run partitioning configuration migration"; Path = "Scripts/MigrateRunPartitioning.sql"; Kind = "Always" },
 	@{ Name = "query_store_query Table"; Path = "Tables/QueryStore/query_store_query.sql"; Kind = "Table"; Object = "query_store_query" },
 	@{ Name = "query_store_query_text Table"; Path = "Tables/QueryStore/query_store_query_text.sql"; Kind = "Table"; Object = "query_store_query_text" },
 	@{ Name = "query_store_plan Table"; Path = "Tables/QueryStore/query_store_plan.sql"; Kind = "Table"; Object = "query_store_plan" },
@@ -73,6 +74,8 @@ $deploymentSteps = @(
 	@{ Name = "query_store_runtime_stats_canonical_PartitionMaintenance"; Path = "Tables/PartitionMaintenance/query_store_runtime_stats_canonical_PartitionMaintenance.sql"; Kind = "Table"; Object = "query_store_runtime_stats_canonical_PartitionMaintenance" },
 	@{ Name = "query_store_wait_stats_contributor_PartitionMaintenance"; Path = "Tables/PartitionMaintenance/query_store_wait_stats_contributor_PartitionMaintenance.sql"; Kind = "Table"; Object = "query_store_wait_stats_contributor_PartitionMaintenance" },
 	@{ Name = "query_store_wait_stats_canonical_PartitionMaintenance"; Path = "Tables/PartitionMaintenance/query_store_wait_stats_canonical_PartitionMaintenance.sql"; Kind = "Table"; Object = "query_store_wait_stats_canonical_PartitionMaintenance" },
+	@{ Name = "Legacy partition switch constraint migration"; Path = "Scripts/FixPartitionMaintenanceSwitchConstraints.sql"; Kind = "Always" },
+	@{ Name = "ufn_EvaluatePartitionCapacity Function"; Path = "Functions/ufn_EvaluatePartitionCapacity.sql"; Kind = "Function" },
 	@{ Name = "usp_ManagePartitions Procedure"; Path = "StoredProcedures/usp_ManagePartitions.sql"; Kind = "Procedure" },
 	@{ Name = "usp_InitializeDatabase Procedure"; Path = "StoredProcedures/usp_InitializeDatabase.sql"; Kind = "Procedure" },
 	@{ Name = "usp_GetArchiveSummary Procedure"; Path = "StoredProcedures/usp_GetArchiveSummary.sql"; Kind = "Procedure" },
@@ -85,7 +88,8 @@ $deploymentSteps = @(
 	@{ Name = "qv_report.wait_period_metrics View"; Path = "Views/qv_report.wait_period_metrics.sql"; Kind = "View" },
 	@{ Name = "qv_report.query_wait_period_metrics View"; Path = "Views/qv_report.query_wait_period_metrics.sql"; Kind = "View" },
 	@{ Name = "qv_report.query_plans View"; Path = "Views/qv_report.query_plans.sql"; Kind = "View" },
-	@{ Name = "qv_report.usp_GetShowplanXml Procedure"; Path = "StoredProcedures/qv_report.usp_GetShowplanXml.sql"; Kind = "Procedure" }
+	@{ Name = "qv_report.usp_GetShowplanXml Procedure"; Path = "StoredProcedures/qv_report.usp_GetShowplanXml.sql"; Kind = "Procedure" },
+	@{ Name = "vw_QueryVaultStorageRecommendation View"; Path = "Views/dbo.vw_QueryVaultStorageRecommendation.sql"; Kind = "View" }
 )
 
 function New-ConnectionParameters {

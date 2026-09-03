@@ -75,6 +75,8 @@
     <Folder Include="Partitions\DatabaseProject" />
     <Folder Include="Scripts" />
     <Folder Include="StoredProcedures" />
+    <Folder Include="Functions" />
+    <Folder Include="Functions\DatabaseProject" />
     <Folder Include="Schemas" />
     <Folder Include="Views" />
     <Folder Include="Views\DatabaseProject" />
@@ -95,6 +97,8 @@
     <None Include="Partitions\PartitionScheme.sql" />
     <None Include="Scripts\.gitkeep" />
     <None Include="Scripts\DeployQueryVault.ps1" />
+    <None Include="Scripts\MigrateRunPartitioning.sql" />
+    <None Include="Scripts\FixPartitionMaintenanceSwitchConstraints.sql" />
     <None Include="StoredProcedures\.gitkeep" />
     <None Include="StoredProcedures\usp_ArchiveQueryStore.sql" />
     <None Include="StoredProcedures\usp_GetArchiveSummary.sql" />
@@ -103,6 +107,8 @@
     <None Include="StoredProcedures\usp_MaterializeCanonicalQueryStoreStats.sql" />
     <None Include="StoredProcedures\usp_PurgeExpiredArchives.sql" />
     <None Include="StoredProcedures\qv_report.usp_GetShowplanXml.sql" />
+    <None Include="Functions\ufn_EvaluatePartitionCapacity.sql" />
+    <None Include="Views\dbo.vw_QueryVaultStorageRecommendation.sql" />
     <None Include="Views\qv_report.periods.sql" />
     <None Include="Views\qv_report.query_period_metrics.sql" />
     <None Include="Views\qv_report.period_metrics.sql" />
@@ -125,6 +131,7 @@
     <None Include="Tests\TestPartitionSafetyGuards.sql" />
     <None Include="Tests\TestProcedureCompilation.sql" />
     <None Include="Tests\TestRepositoryContracts.ps1" />
+    <None Include="Tests\TestRunPartitionLifecycle.sql" />
   </ItemGroup>
   <ItemGroup>
     <Build Include="Tables\Core\DatabaseConfig.sql" />
@@ -151,6 +158,7 @@
     <Build Include="Tables\QueryStore\query_store_wait_stats_canonical.sql" />
     <Build Include="Partitions\DatabaseProject\PartitionFunction.sql" />
     <Build Include="Partitions\DatabaseProject\PartitionScheme.sql" />
+    <Build Include="Functions\DatabaseProject\ufn_EvaluatePartitionCapacity.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_ArchiveQueryStore.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_GetArchiveSummary.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_InitializeDatabase.sql" />
@@ -164,6 +172,7 @@
     <Build Include="Views\DatabaseProject\qv_report.wait_period_metrics.sql" />
     <Build Include="Views\DatabaseProject\qv_report.query_wait_period_metrics.sql" />
     <Build Include="Views\DatabaseProject\qv_report.query_plans.sql" />
+    <Build Include="Views\DatabaseProject\dbo.vw_QueryVaultStorageRecommendation.sql" />
     <Build Include="StoredProcedures\DatabaseProject\qv_report.usp_GetShowplanXml.sql" />
   </ItemGroup>
 </Project>

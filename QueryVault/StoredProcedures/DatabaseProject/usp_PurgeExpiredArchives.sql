@@ -87,6 +87,10 @@ BEGIN
 				DELETE dbo.RunMetadata
 				WHERE RunID = @RunID;
 
+				EXEC dbo.usp_ManagePartitions
+					@Operation = N'MergeBoundary',
+					@RunID = @RunID;
+
 				SET @PurgedCount += 1;
 			END;
 

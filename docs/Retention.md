@@ -27,6 +27,7 @@ flowchart TD
     REVIEW -->|approved| SWITCH[Switch archive partitions]
     SWITCH --> TRUNCATE[Truncate maintenance partitions]
     TRUNCATE --> META[Delete RunMetadata row]
+    META --> MERGE[Merge obsolete RunID boundary]
     REVIEW -->|not approved| KEEP
 ```
 
@@ -45,14 +46,34 @@ and retention policy before rerunning with `@DryRun = 0`. The production
 deployment script does not execute purge automatically and does not alter SQL
 Agent jobs.
 
-Purging is destructive. Partition switch/truncate removes the six archived
-Query Store entity sets for the selected RunID, then deletes its metadata. A
-verified database backup is the recovery path.
+Purging is destructive. Partition switch/truncate removes all ten run-owned
+Query Store entity sets for the selected RunID, then deletes its metadata and
+merges the now-obsolete boundary. A verified database backup is the recovery
+path.
 
 The integrated partition procedure refuses to switch or truncate a physical
 partition that contains another `RunID`, and direct operations own a transaction
 when the caller does not. A rejection indicates partition-boundary or legacy
 constraint work that must be reviewed; do not disable the guard.
+
+`DoNotDelete = 1` blocks direct switch, truncate, and boundary merge as well as
+normal purge selection. Boundary merge also refuses any surviving
+`RunMetadata` row and verifies the target physical partition is empty across
+all archive and maintenance tables.
+
+## Capacity policy
+
+`DatabaseConfig.MaxRetainedRuns` is the maximum count of retained `In Progress`
+and `Completed` runs for that configured server/database. It defaults to 1,000
+and accepts 1 through 14,990. It is not a ceiling on lifetime RunID values.
+
+`PartitionWarningPct` defaults to 80 and accepts 50 through 95. Allocation emits
+an informational warning at that percentage and rejects a new run beyond the
+configured retained-run maximum. A separate global guard reserves ten of SQL
+Server's 15,000 possible partitions and rejects projected fanout above 14,990.
+
+Schedule cadence remains controlled by the existing schedule settings. A run
+is not assumed to represent a calendar day, month, or other fixed interval.
 
 ## Reporting effect
 

@@ -17,11 +17,11 @@ $namespace = [System.Xml.XmlNamespaceManager]::new($project.NameTable)
 $namespace.AddNamespace("msb", $project.Project.NamespaceURI)
 $buildItems = @($project.SelectNodes("//msb:Build", $namespace))
 
-Assert-Condition ($buildItems.Count -eq 38) "Expected 38 canonical SQL build items; found $($buildItems.Count)."
+Assert-Condition ($buildItems.Count -eq 40) "Expected 40 canonical SQL build items; found $($buildItems.Count)."
 
 foreach ($item in $buildItems) {
     $relativePath = [string]$item.Include
-    Assert-Condition ($relativePath -match '^(Partitions|Tables|StoredProcedures|Schemas|Views)\\') "Noncanonical build item: $relativePath"
+    Assert-Condition ($relativePath -match '^(Functions|Partitions|Tables|StoredProcedures|Schemas|Views)\\') "Noncanonical build item: $relativePath"
     Assert-Condition (Test-Path -LiteralPath (Join-Path $projectRoot $relativePath) -PathType Leaf) "Missing build source: $relativePath"
 }
 
@@ -93,6 +93,24 @@ foreach ($viewName in $reportingViewNames) {
 $reportSchemaBuildItem = @($buildItems | Where-Object { $_.Include -eq "Schemas\qv_report.sql" })
 Assert-Condition ($reportSchemaBuildItem.Count -eq 1) "The qv_report schema is missing from the SSDT model."
 
+$deploymentCapacityFunction = Get-Content -LiteralPath (Join-Path $projectRoot "Functions\ufn_EvaluatePartitionCapacity.sql") -Raw
+$functionDeclarationStart = $deploymentCapacityFunction.IndexOf("CREATE OR ALTER FUNCTION")
+Assert-Condition ($functionDeclarationStart -ge 0) "Deployment capacity function is missing its idempotent declaration."
+$expectedModelFunction = $deploymentCapacityFunction.Substring($functionDeclarationStart)
+$expectedModelFunction = [regex]::Replace($expectedModelFunction, '^CREATE OR ALTER FUNCTION', 'CREATE FUNCTION', 1)
+$expectedModelFunction = [regex]::Replace($expectedModelFunction, '(?ms)\r?\nGO\s*$', '')
+$actualModelFunction = Get-Content -LiteralPath (Join-Path $projectRoot "Functions\DatabaseProject\ufn_EvaluatePartitionCapacity.sql") -Raw
+Assert-Condition (($actualModelFunction -replace "`r`n", "`n").TrimEnd() -ceq ($expectedModelFunction -replace "`r`n", "`n").TrimEnd()) "SSDT capacity function has drifted from its deployment source."
+
+$deploymentStorageView = Get-Content -LiteralPath (Join-Path $projectRoot "Views\dbo.vw_QueryVaultStorageRecommendation.sql") -Raw
+$storageViewDeclarationStart = $deploymentStorageView.IndexOf("CREATE OR ALTER VIEW")
+Assert-Condition ($storageViewDeclarationStart -ge 0) "Deployment storage recommendation view is missing its idempotent declaration."
+$expectedModelStorageView = $deploymentStorageView.Substring($storageViewDeclarationStart)
+$expectedModelStorageView = [regex]::Replace($expectedModelStorageView, '^CREATE OR ALTER VIEW', 'CREATE VIEW', 1)
+$expectedModelStorageView = [regex]::Replace($expectedModelStorageView, '(?ms)\r?\nGO\s*$', '')
+$actualModelStorageView = Get-Content -LiteralPath (Join-Path $projectRoot "Views\DatabaseProject\dbo.vw_QueryVaultStorageRecommendation.sql") -Raw
+Assert-Condition (($actualModelStorageView -replace "`r`n", "`n").TrimEnd() -ceq ($expectedModelStorageView -replace "`r`n", "`n").TrimEnd()) "SSDT storage recommendation view has drifted from its deployment source."
+
 [xml]$fixedProject = Get-Content -LiteralPath (Join-Path $projectRoot "QueryVault_Fixed.sqlproj") -Raw
 $fixedNamespace = [System.Xml.XmlNamespaceManager]::new($fixedProject.NameTable)
 $fixedNamespace.AddNamespace("msb", $fixedProject.Project.NamespaceURI)
@@ -104,8 +122,9 @@ $masterReference = @($project.SelectNodes("//msb:ArtifactReference", $namespace)
 Assert-Condition ($masterReference.Count -eq 1) "The SQL Server 2019 master DACPAC reference is missing."
 
 $archiveProcedure = Get-Content -LiteralPath (Join-Path $projectRoot "StoredProcedures\usp_ArchiveQueryStore.sql") -Raw
-Assert-Condition ($archiveProcedure.Contains("SET @PartitionsToAdd = @RunID - @MaxRunIDInFunction;")) "Archive partition growth does not cover identity jumps."
-Assert-Condition ($archiveProcedure.Contains("@NewPartitionCount = @PartitionsToAdd;")) "Archive procedure does not pass the calculated partition count."
+Assert-Condition ($archiveProcedure.Contains("@Operation = N'EnsureRunPartition'")) "Archive procedure does not allocate the run lifecycle partition."
+Assert-Condition ($archiveProcedure.Contains("@ConfigID = @ConfigID")) "Archive partition allocation does not enforce database capacity policy."
+Assert-Condition (-not $archiveProcedure.Contains("@RunID - @MaxRunIDInFunction")) "Archive partition growth still depends on lifetime RunID magnitude."
 Assert-Condition ($archiveProcedure.Contains("query_store_runtime_stats_contributor")) "Runtime contributor capture is missing."
 Assert-Condition ($archiveProcedure.Contains("query_store_wait_stats_contributor")) "Wait contributor capture is missing."
 Assert-Condition ($archiveProcedure.Contains("usp_MaterializeCanonicalQueryStoreStats")) "Canonical materialization call is missing."
@@ -136,14 +155,30 @@ $partitionProcedure = Get-Content -LiteralPath (Join-Path $projectRoot "StoredPr
 Assert-Condition ($partitionProcedure.Contains("Refusing to switch a physical partition that contains multiple RunID values.")) "SwitchOut shared-partition guard is missing."
 Assert-Condition ($partitionProcedure.Contains("Refusing to truncate a physical partition that contains multiple RunID values.")) "Truncate shared-partition guard is missing."
 Assert-Condition ($partitionProcedure.Contains("IF @StartedTransaction = 1 AND XACT_STATE() <> 0")) "Owned-transaction rollback guard is missing."
+Assert-Condition ($partitionProcedure.Contains("N'EnsureRunPartition'")) "Exact RunID partition allocation is missing."
+Assert-Condition ($partitionProcedure.Contains("N'MergeBoundary'")) "Obsolete RunID boundary merge is missing."
+Assert-Condition ($partitionProcedure.Contains("DoNotDelete = 1")) "Pinned-run partition protection is missing."
+Assert-Condition ($partitionProcedure.Contains("@RunID + 1")) "Empty future RunID partition allocation is missing."
+Assert-Condition ($partitionProcedure.Contains("SqlServerPartitionLimit")) "SQL Server physical partition ceiling guard is missing."
+Assert-Condition ($partitionProcedure.Contains("migrate legacy overflow data")) "Nonempty legacy overflow split guard is missing."
+
+$configTable = Get-Content -LiteralPath (Join-Path $projectRoot "Tables\Core\DatabaseConfig.sql") -Raw
+Assert-Condition ($configTable.Contains("MaxRetainedRuns")) "MaxRetainedRuns configuration is missing."
+Assert-Condition ($configTable.Contains("PartitionWarningPct")) "PartitionWarningPct configuration is missing."
+Assert-Condition ($configTable.Contains("StorageMode")) "StorageMode configuration is missing."
+Assert-Condition ($configTable.Contains("BETWEEN 1 AND 14990")) "MaxRetainedRuns validation is missing."
+Assert-Condition ($configTable.Contains("BETWEEN 50 AND 95")) "PartitionWarningPct validation is missing."
+Assert-Condition ($configTable.Contains("N'AUTO', N'ROWSTORE', N'COLUMNSTORE'")) "StorageMode validation is missing."
 
 Assert-Condition (Test-Path -LiteralPath (Join-Path $repositoryRoot "docs\CURRENT_STATE.md") -PathType Leaf) "CURRENT_STATE.md is missing."
 Assert-Condition (Test-Path -LiteralPath (Join-Path $repositoryRoot "docs\TARGET_GAP_ANALYSIS.md") -PathType Leaf) "TARGET_GAP_ANALYSIS.md is missing."
 Assert-Condition (Test-Path -LiteralPath (Join-Path $projectRoot "Tests\TestCanonicalQueryStoreAggregation.sql") -PathType Leaf) "Canonical synthetic aggregation test is missing."
+Assert-Condition (Test-Path -LiteralPath (Join-Path $projectRoot "Tests\TestRunPartitionLifecycle.sql") -PathType Leaf) "Run partition lifecycle test is missing."
+Assert-Condition (Test-Path -LiteralPath (Join-Path $projectRoot "Scripts\MigrateRunPartitioning.sql") -PathType Leaf) "Run partitioning migration is missing."
 
 [pscustomobject]@{
     TestResult = "PASS"
     CanonicalBuildItems = $buildItems.Count
     ReportingContractItems = 10
-    PartitionSafetyGuards = 4
+    PartitionSafetyGuards = 10
 }

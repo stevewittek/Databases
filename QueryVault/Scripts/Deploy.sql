@@ -94,6 +94,9 @@ GO
 :r "$(ProjectDir)Tables\Core\DatabaseConfig.sql"
 GO
 
+:r "$(ProjectDir)Scripts\MigrateRunPartitioning.sql"
+GO
+
 -- ========================================
 -- STEP 5: Create QueryStore Archive Tables
 -- ========================================
@@ -172,6 +175,9 @@ GO
 :r "$(ProjectDir)Tables\PartitionMaintenance\query_store_wait_stats_canonical_PartitionMaintenance.sql"
 GO
 
+:r "$(ProjectDir)Scripts\FixPartitionMaintenanceSwitchConstraints.sql"
+GO
+
 -- ========================================
 -- STEP 7: Create Stored Procedures
 -- ========================================
@@ -179,6 +185,9 @@ PRINT '';
 PRINT '========================================';
 PRINT 'STEP 7: Creating Stored Procedures';
 PRINT '========================================';
+GO
+
+:r "$(ProjectDir)Functions\ufn_EvaluatePartitionCapacity.sql"
 GO
 
 :r "$(ProjectDir)StoredProcedures\usp_ManagePartitions.sql"
@@ -223,6 +232,8 @@ GO
 :r "$(ProjectDir)Views\qv_report.query_plans.sql"
 GO
 :r "$(ProjectDir)StoredProcedures\qv_report.usp_GetShowplanXml.sql"
+GO
+:r "$(ProjectDir)Views\dbo.vw_QueryVaultStorageRecommendation.sql"
 GO
 
 -- ========================================

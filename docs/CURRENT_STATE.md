@@ -1,176 +1,226 @@
 # QueryVault Current State
 
-Status date: 2026-09-03. Branch:
-codex/queryvault-canonical-aggregation, based exactly on integration commit
-e3a536d0ae90d326d0c8968a5964f1bcb7053c77.
+Status date: 2026-09-03. Working branch:
+`codex/queryvault-run-partitioning`, created from
+`origin/codex/queryvault-canonical-aggregation` at
+`cac2e5a4391647523b4a42d8b040f260bbd2dac5`.
 
 ## Current architecture
 
-QueryVault is a same-instance SQL Server archive for selected Query Store
-periods. It is not a Query Store replacement and does not provide live
-monitoring. One archive execution creates a RunMetadata period, copies selected
-completed Query Store intervals and metadata, preserves native statistic rows
-as contributors, and materializes complete observations. Internal dbo storage
-is exposed to consumers only through qv_report.
+QueryVault is a same-instance, long-term archive of selected SQL Server Query
+Store periods. It is not a Query Store replacement and does not provide live
+monitoring, a web UI, or an execution-plan renderer. One archive execution
+creates a logical `RunMetadata` period, allocates its run-owned storage
+lifecycle, copies completed Query Store metadata and native statistic
+contributors, materializes canonical observations, and publishes the result
+through the stable `qv_report` boundary.
 
-The current implementation has three storage layers:
+The implementation has three layers:
 
-1. period/configuration metadata in DatabaseConfig and RunMetadata;
-2. Query Store metadata, lossless statistic contributors, and canonical facts
-   in partitioned dbo tables; and
-3. the stable qv_report views and native Showplan retrieval procedure.
+1. configuration and logical period metadata in `DatabaseConfig` and
+   `RunMetadata`;
+2. internal RunID-partitioned Query Store metadata, contributor facts,
+   canonical facts, and aligned maintenance tables; and
+3. the stable `qv_report` views and native Showplan retrieval procedure.
 
-Logical periods and physical storage are not yet separated: RunID is both the
-period identity and partitioning key.
+`RunID` is the immutable logical period identity and the lifecycle key carried
+by every run-owned row. SQL Server `partition_number` is derived from
+`PF_RunID`, is not stored in metadata, and may change when an older boundary is
+merged. One retained run is isolated in one intended physical partition; a
+configurable capture schedule does not imply calendar-based partitions.
 
 ## Current schema
 
-Metadata and legacy archive tables:
+Metadata:
 
-- DatabaseConfig and RunMetadata;
-- query_store_query_text, query_store_query, query_store_plan;
-- query_store_runtime_stats_interval;
-- legacy query_store_runtime_stats and query_store_wait_stats.
+- `dbo.DatabaseConfig`, now including `MaxRetainedRuns` (default 1,000;
+  1..14,990), `PartitionWarningPct` (default 80; 50..95), and `StorageMode`
+  (`AUTO`, `ROWSTORE`, or `COLUMNSTORE`; default `AUTO`);
+- `dbo.RunMetadata`, retaining existing logical identity, period state,
+  protection, timing, source, and row-count metadata. No redundant archive key,
+  physical partition number, or misleading per-run storage-mode field was
+  added.
 
-Canonical aggregation adds:
+Run-owned archive tables:
 
-- query_store_runtime_stats_contributor;
-- query_store_runtime_stats_canonical;
-- query_store_wait_stats_contributor; and
-- query_store_wait_stats_canonical.
+- query text, query, plan, and runtime interval metadata;
+- legacy runtime and wait facts;
+- lossless runtime and wait contributor facts; and
+- canonical runtime and wait facts.
 
-All ten Query Store archive tables have aligned PartitionMaintenance tables.
-They are partitioned by RunID using PF_RunID/PS_RunID and use clustered
-columnstore with aligned nonclustered keys. Canonical facts have natural
-primary keys at the documented Query Store grains. Contributor tables use an
-archive surrogate ID and retain native row IDs and SQL Server 2022+
-replica_group_id lineage.
+All ten run-owned tables and their ten `PartitionMaintenance` mirrors use
+`PF_RunID`/`PS_RunID`, clustered columnstore, and aligned nonclustered keys.
+Canonical facts have unique keys at the documented Query Store grains.
+Contributor tables retain native statistic IDs and SQL Server 2022+
+`replica_group_id` lineage.
+
+There are no shared/deduplicated data tables today. Future immutable query-text
+or Showplan objects would be shared and must remain outside the run switch and
+truncate lifecycle. `DatabaseConfig` and `RunMetadata` are metadata, not
+switchable fact tables.
+
+New administrative objects are:
+
+- `dbo.ufn_EvaluatePartitionCapacity`, a deterministic inline policy function;
+- `dbo.vw_QueryVaultStorageRecommendation`, an advisory view that evaluates
+  recent RuntimeStats and WaitStats volumes independently; and
+- `Scripts/MigrateRunPartitioning.sql`, an idempotent additive migration for
+  the three configuration columns and their checks/defaults.
+
+The existing `FixPartitionMaintenanceSwitchConstraints.sql` compatibility
+migration is now part of deployment ordering. On older installations it drops
+only the six named tautological `CHECK (RunID = RunID)` constraints that SQL
+Server cannot semantically validate for `ALTER TABLE ... SWITCH`; partitioning,
+keys, data, and meaningful canonical-state constraints are unchanged.
 
 ## Existing capture logic
 
-dbo.usp_ArchiveQueryStore:
+`dbo.usp_ArchiveQueryStore`:
 
 - accepts a local source database and requested window;
-- reads flush_interval_seconds and caps the end at current UTC minus one flush
-  interval;
-- selects intervals with end_time greater than the start and less than or
-  equal to the effective end;
+- inserts one `RunMetadata` identity, then calls `EnsureRunPartition` for that
+  exact RunID and its configuration;
+- reads `flush_interval_seconds`, caps the end at current UTC minus one flush
+  interval, and captures only completed intervals;
 - copies query text, query, plan, and interval metadata;
-- copies every selected native runtime and wait row into contributor tables;
-- projects replica_group_id on SQL Server 2022+ and NULL on older versions;
-- materializes runtime by (plan_id, execution_type,
-  runtime_stats_interval_id);
-- materializes waits by (plan_id, runtime_stats_interval_id, execution_type,
-  wait_category);
-- records canonical fact counts and marks the period completed in one archive
-  transaction; and
+- retains every selected native runtime and wait row as a contributor;
+- projects `replica_group_id` on SQL Server 2022+ and NULL on older versions;
+- materializes runtime by `(plan_id, execution_type,
+  runtime_stats_interval_id)`;
+- materializes waits by `(plan_id, runtime_stats_interval_id, execution_type,
+  wait_category)`;
+- records existing runtime/wait counts and completes the logical period in the
+  archive transaction; and
 - preserves failed-run metadata if the archive transaction rolls back.
 
-Runtime counts and totals are additive, means are execution-weighted, extrema
-are combined, and chronological last values are selected only when unambiguous.
-Wait totals are additive and average wait is total wait divided by matching
-canonical executions. Unsupported multi-contributor dispersion and ambiguous
-last values are explicitly NULL with status fields. No source contributor is
-discarded.
-
-Normal capture does not archive active intervals. The canonical schema supports
-PROVISIONAL state and deterministic rematerialization, but active capture and
-automatic close/reconcile orchestration are incomplete.
+The partition manager serializes allocation using a transaction-owned
+application lock. It allocates only missing boundaries at `RunID` and
+`RunID + 1`; identity gaps therefore consume at most two physical boundaries,
+not one partition per skipped ID. It refuses to split a nonempty legacy
+overflow partition.
 
 ## Existing retention logic
 
-DoNotDelete protects a period. Otherwise a completed period with an expired
-RetentionDate is eligible only when its matching DatabaseConfig row enables
-automatic deletion. Purge offers dry-run preview, rechecks eligibility under
-locking, then switches and truncates aligned partitions.
+`DoNotDelete` protects a period. Otherwise, a completed period with an expired
+`RetentionDate` is eligible only when its matching `DatabaseConfig` enables
+automatic deletion. Purge supports dry-run preview and rechecks eligibility
+under locks.
 
-Partition extension covers RunID identity jumps. Switch and truncate reject a
-physical partition containing another RunID, and direct maintenance operations
-only commit or roll back transactions they own.
+For each eligible run, purge:
 
-Rolling, Baseline, Incident, and Pinned are not authoritative stored
-classifications. The current DoNotDelete flag can protect data but is not a
-substitute for the approved classification model.
+1. switches all ten aligned run-owned partitions to maintenance tables;
+2. truncates those maintenance partitions;
+3. deletes `RunMetadata`; and
+4. merges the obsolete exact RunID boundary.
+
+Switch/truncate reject shared physical partitions, nonempty targets, and pinned
+runs. Merge rejects pinned or surviving metadata and verifies the target
+partition is empty across all twenty archive/maintenance tables. Direct
+maintenance operations commit or roll back only transactions they own.
+
+`MaxRetainedRuns` is evaluated per configured server/database over retained
+`In Progress` and `Completed` runs. It is not a lifetime RunID ceiling.
+Warnings begin at the configured percentage. A separate physical guard honors
+SQL Server's 15,000-partition maximum and reserves ten partitions, making
+14,990 the operational ceiling.
+
+Rolling, Baseline, Incident, and Pinned are still not authoritative stored
+classifications. `DoNotDelete` provides protection but is not a substitute for
+the approved classification model.
 
 ## Current Query Store correctness
 
-Canonical runtime aggregation is implemented for new captures. Canonical wait
-aggregation is implemented using the documented wait grain and per-execution
-average semantics. Native row IDs are contributor attributes, not canonical
-keys. Replica groups remain lineage and do not split the canonical grain.
+Canonical runtime aggregation is implemented for new captures at the
+documented plan/execution-type/interval grain. Canonical wait aggregation is
+implemented at plan/interval/execution-type/wait-category grain with additive
+wait totals and matching runtime-execution denominators. Native statistic IDs
+are contributor attributes, not canonical keys; replica groups remain lineage.
 
-Completed-interval preference is implemented. Provisional state exists at the
-fact/materializer layer, but active capture and later reconciliation are not
-implemented.
+Runtime counts and totals are additive, means are execution-weighted, extrema
+are combined, and chronological last values are selected only when
+unambiguous. Unsupported multi-contributor dispersion and ambiguous last values
+are explicitly unavailable with status fields. No contributor is discarded.
 
-Legacy facts remain unchanged. qv_report prefers canonical rows for a run and
-uses legacy rows only when that run has no canonical representation. The local
-SQL 2019 archive contains duplicate legacy runtime groups in RunIDs 8 and 12;
-those periods require recapture or independent reconciliation before baseline
-use.
+Normal capture excludes active intervals. The schema and materializer support
+`PROVISIONAL`, but active capture and audited close/reconcile orchestration are
+not implemented. Legacy facts remain unchanged; `qv_report` prefers canonical
+facts per run and falls back to legacy only when a run has no canonical facts.
+
+The local SQL Server 2019 validation archive contains legacy duplicate runtime
+groups in RunIDs 8 and 12. It also contains RunID 1004 in the nonempty overflow
+partition above boundary 120. The new guard reports that a reviewed migration
+is required rather than attempting an unsafe columnstore split. No local data
+was moved or deleted.
 
 ## Reporting objects
 
-The stable public interface is:
+The stable public interface remains unchanged:
 
 | Object | Purpose |
 | --- | --- |
-| qv_report.periods | Archived periods, classification placeholder, observation state |
-| qv_report.period_metrics | Workload summary per period |
-| qv_report.query_period_metrics | Top-query and query-performance metrics |
-| qv_report.wait_period_metrics | Wait summary per period/category |
-| qv_report.query_wait_period_metrics | Waits per period/query/category |
-| qv_report.query_plans | Plan history and native Showplan XML |
-| qv_report.usp_GetShowplanXml | Native Showplan retrieval |
+| `qv_report.periods` | archived periods and observation state |
+| `qv_report.period_metrics` | workload summary per period |
+| `qv_report.query_period_metrics` | top-query and query-performance metrics |
+| `qv_report.wait_period_metrics` | wait summary per period/category |
+| `qv_report.query_wait_period_metrics` | waits per period/query/category |
+| `qv_report.query_plans` | plan history and native Showplan XML |
+| `qv_report.usp_GetShowplanXml` | native Showplan retrieval |
 
-The existing four Grafana dashboards continue to query only these objects.
-Their JSON and SQL were not modified by canonical aggregation. SSMS, Power BI,
-scripts, and future clients should use the same interface.
+No `qv_report` or Grafana file changed in this workstream. SSMS, Power BI,
+Grafana, scripts, and future consumers should continue using this interface.
+The storage recommendation view is an administrative `dbo` object, not a
+reporting-contract replacement.
 
 ## Python components
 
-There are no Python source files, Python package manifests, or Python runtime
-components in the repository. Deployment and validation automation is
-PowerShell, SQLCMD/T-SQL, and SSDT/MSBuild.
+There are no Python sources, package manifests, or Python runtime components.
+Automation uses PowerShell, SQLCMD/T-SQL, and SSDT/MSBuild.
 
 ## Incomplete features
 
-- controlled Rolling/Baseline/Incident/Pinned classifications;
-- separation of logical periods from physical partitions;
-- active-interval capture and close/reconcile scheduling;
+- controlled Rolling/Baseline/Incident/Pinned classifications and transition
+  history;
+- active-interval capture and audited close/reconcile orchestration;
 - a consistent multi-view source snapshot during capture;
-- cross-period query text and Showplan deduplication;
+- cross-period immutable query-text and Showplan deduplication;
 - Query Store context-settings and options snapshots;
 - full server/database environment and configuration snapshots;
-- evaluated COLUMNSTORE_ARCHIVE transitions for cold preserved partitions;
-- remote SQL Server capture and a formal source identity;
+- production-shaped rowstore versus columnstore benchmarks and any actual
+  `StorageMode` conversion workflow;
+- evaluated `COLUMNSTORE_ARCHIVE` transitions for cold preserved partitions;
+- remote source capture and formal source identity;
 - overlap/idempotency policy for archive windows; and
-- live least-privilege Grafana and Voyager2 acceptance after an approved
-  deployment.
+- reviewed migration of legacy rows currently sharing overflow partitions.
 
 ## Potential data-loss or correctness problems
 
-- legacy runtime facts can contain multiple native rows at one logical grain;
-- old periods can extend beyond their recorded end and may be partial;
-- several source catalog views are read in separate statements, so Query Store
-  cleanup or change during capture can produce an inconsistent snapshot;
-- current partition design couples retention granularity to RunID and refuses
-  unsafe shared-partition operations rather than eliminating that layout risk;
-- multi-contributor standard deviation cannot be reconstructed exactly without
-  a documented native variance convention, so it is intentionally unavailable;
-- active intervals are not archived, avoiding mislabelling but leaving no
-  provisional incident workflow; and
-- SQL Server version-dependent metadata beyond replica_group_id still needs a
-  formal compatibility adapter and live SQL Server 2022+ validation.
+- old legacy runtime facts can contain multiple native rows at one logical
+  grain and should not be used as canonical baselines without reconciliation;
+- historical periods can extend beyond recorded bounds or be partial;
+- separate source catalog statements can observe Query Store cleanup/change at
+  different moments;
+- legacy overflow data prevents safe exact splitting with clustered
+  columnstore and requires an explicit migration plan;
+- retention is destructive after operator approval; backup remains the
+  recovery path;
+- active intervals are excluded, so there is no provisional incident capture
+  workflow yet; and
+- version-dependent metadata beyond replica lineage needs a formal adapter and
+  live SQL Server 2022+ validation.
 
 ## Reusable functionality
 
-Reusable components include the completed-interval selector, additive
-contributor/canonical schema, canonical materializer, version-aware replica
-projection, partition safety guards, dry-run retention path, native Query Store
-metadata capture, qv_report boundary, Grafana package, native Showplan
-workflow, SSDT model, deployment pre/post checks, and deterministic
-transactional tests.
+Reusable components include completed-interval selection, lossless contributor
+capture, canonical materialization, version-aware replica projection,
+RunID-based exact/sparse partition allocation, capacity policy, serialized
+partition management, aligned twenty-table lifecycle checks, dry-run purge,
+native Query Store metadata capture, the unchanged `qv_report`/Grafana
+boundary, native Showplan workflow, SSDT model, deployment pre/post checks, and
+transactional deterministic tests.
 
-No database, SQL Agent job, login, Grafana instance, or Voyager2 object was
-changed while producing this branch.
+The requested change was implemented as a focused lifecycle formalization, not
+a broad schema redesign. Apart from the three additive settings, function,
+view, and removal of the six legacy tautological switch blockers when present,
+existing storage is reused. No redundant `ArchiveRunKey` was added, no
+reporting contract changed, and no database, SQL Agent job, login, Grafana
+instance, master branch, or Voyager2 object was deployed or modified.

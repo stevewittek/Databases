@@ -81,7 +81,7 @@ function Get-QueryVaultSnapshot {
 
 	$objectQuery = @"
 SET NOCOUNT ON;
-DECLARE @Expected TABLE (ContractName varchar(10) NOT NULL, ObjectType char(2) NOT NULL, SchemaName sysname NOT NULL, ObjectName sysname NOT NULL);
+DECLARE @Expected TABLE (ContractName varchar(12) NOT NULL, ObjectType char(2) NOT NULL, SchemaName sysname NOT NULL, ObjectName sysname NOT NULL);
 INSERT @Expected (ContractName, ObjectType, SchemaName, ObjectName)
 VALUES
 ('Core','U','dbo','DatabaseConfig'),('Core','U','dbo','RunMetadata'),
@@ -98,6 +98,7 @@ VALUES
 ('Canonical','U','dbo','query_store_wait_stats_canonical_PartitionMaintenance'),
 ('Core','P','dbo','usp_ManagePartitions'),('Core','P','dbo','usp_InitializeDatabase'),('Core','P','dbo','usp_GetArchiveSummary'),
 ('Core','P','dbo','usp_ArchiveQueryStore'),('Core','P','dbo','usp_PurgeExpiredArchives'),
+('Lifecycle','IF','dbo','ufn_EvaluatePartitionCapacity'),('Lifecycle','V','dbo','vw_QueryVaultStorageRecommendation'),
 ('Canonical','P','dbo','usp_MaterializeCanonicalQueryStoreStats'),
 ('Reporting','V','qv_report','periods'),('Reporting','V','qv_report','query_period_metrics'),
 ('Reporting','V','qv_report','period_metrics'),('Reporting','V','qv_report','wait_period_metrics'),
@@ -108,6 +109,7 @@ SELECT
   (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Core' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingCoreObjectCount,
   (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Canonical' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingCanonicalObjectCount,
   (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Reporting' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingReportingObjectCount,
+  (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Lifecycle' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingLifecycleObjectCount,
   CASE WHEN SCHEMA_ID(N'qv_report') IS NULL THEN 0 ELSE 1 END AS ReportSchemaExists,
   CASE WHEN EXISTS (SELECT 1 FROM sys.schemas AS s WHERE s.name=N'qv_report' AND USER_NAME(s.principal_id)=N'dbo') THEN 1 ELSE 0 END AS ReportSchemaIsDboOwned,
   (SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0) AS UserTableCount,
@@ -116,9 +118,27 @@ SELECT
   (SELECT COUNT(*) FROM sys.partition_schemes WHERE name=N'PS_RunID') AS PartitionSchemeCount,
   (SELECT COUNT_BIG(*) FROM dbo.DatabaseConfig) AS ConfigCount,
   (SELECT COUNT_BIG(*) FROM dbo.RunMetadata) AS RunMetadataCount,
-  (SELECT COUNT_BIG(*) FROM dbo.DatabaseConfig WHERE DefaultDaysToArchive<=0 OR DefaultRetentionDays<=0) AS InvalidConfigCount;
+  (SELECT COUNT_BIG(*) FROM dbo.DatabaseConfig
+   WHERE DefaultDaysToArchive<=0 OR DefaultRetentionDays<=0) AS InvalidConfigCount,
+  CASE WHEN COL_LENGTH(N'dbo.DatabaseConfig',N'MaxRetainedRuns') IS NOT NULL
+         AND COL_LENGTH(N'dbo.DatabaseConfig',N'PartitionWarningPct') IS NOT NULL
+         AND COL_LENGTH(N'dbo.DatabaseConfig',N'StorageMode') IS NOT NULL
+       THEN 1 ELSE 0 END AS LifecycleConfigColumnsExist;
 "@
 	$objects = Invoke-QueryVaultSql -Database $DatabaseName -Query $objectQuery -QueryTimeout 60
+	$lifecycleConfigColumnsExist = [bool]$objects.LifecycleConfigColumnsExist
+	$invalidLifecycleConfigCount = 0L
+	if ($lifecycleConfigColumnsExist) {
+		$invalidLifecycleConfig = Invoke-QueryVaultSql -Database $DatabaseName -Query @"
+SET NOCOUNT ON;
+SELECT COUNT_BIG(*) AS InvalidLifecycleConfigCount
+FROM dbo.DatabaseConfig
+WHERE MaxRetainedRuns NOT BETWEEN 1 AND 14990
+   OR PartitionWarningPct NOT BETWEEN 50 AND 95
+   OR StorageMode NOT IN (N'AUTO',N'ROWSTORE',N'COLUMNSTORE');
+"@ -QueryTimeout 60
+		$invalidLifecycleConfigCount = [long]$invalidLifecycleConfig.InvalidLifecycleConfigCount
+	}
 
 	$rowQuery = @"
 SET NOCOUNT ON;
@@ -141,11 +161,17 @@ ORDER BY t.name;
 		[ordered]@{ TableName = [string]$_.TableName; RowCount = [long]$_.RowCount }
 	})
 
+	$lifecycleConfigProjection = if ($lifecycleConfigColumnsExist) {
+		"MaxRetainedRuns,PartitionWarningPct,StorageMode"
+	} else {
+		"CONVERT(int,1000) AS MaxRetainedRuns,CONVERT(tinyint,80) AS PartitionWarningPct,CONVERT(nvarchar(20),N'AUTO') AS StorageMode"
+	}
 	$configQuery = @"
 SET NOCOUNT ON;
 SELECT DatabaseName,ServerName,IsEnabled,DefaultDaysToArchive,ScheduleType,
        CONVERT(varchar(16),ScheduleTime,114) AS ScheduleTime,DefaultRetentionDays,
-       AutoDeleteEnabled,MaxRowsPerBatch,EnableParallelCopy
+       AutoDeleteEnabled,MaxRowsPerBatch,EnableParallelCopy,
+       $lifecycleConfigProjection
 FROM dbo.DatabaseConfig
 ORDER BY DatabaseName,ServerName;
 "@
@@ -161,6 +187,9 @@ ORDER BY DatabaseName,ServerName;
 			AutoDeleteEnabled = [bool]$_.AutoDeleteEnabled
 			MaxRowsPerBatch = [int]$_.MaxRowsPerBatch
 			EnableParallelCopy = [bool]$_.EnableParallelCopy
+			MaxRetainedRuns = [int]$_.MaxRetainedRuns
+			PartitionWarningPct = [int]$_.PartitionWarningPct
+			StorageMode = [string]$_.StorageMode
 		}
 	})
 
@@ -192,6 +221,7 @@ ORDER BY j.name,s.name;
 		MissingCoreObjectCount = [int]$objects.MissingCoreObjectCount
 		MissingCanonicalObjectCount = [int]$objects.MissingCanonicalObjectCount
 		MissingReportingObjectCount = [int]$objects.MissingReportingObjectCount
+		MissingLifecycleObjectCount = [int]$objects.MissingLifecycleObjectCount
 		ReportSchemaExists = [bool]$objects.ReportSchemaExists
 		ReportSchemaIsDboOwned = [bool]$objects.ReportSchemaIsDboOwned
 		UserTableCount = [int]$objects.UserTableCount
@@ -201,6 +231,8 @@ ORDER BY j.name,s.name;
 		ConfigCount = [long]$objects.ConfigCount
 		RunMetadataCount = [long]$objects.RunMetadataCount
 		InvalidConfigCount = [long]$objects.InvalidConfigCount
+		LifecycleConfigColumnsExist = $lifecycleConfigColumnsExist
+		InvalidLifecycleConfigCount = $invalidLifecycleConfigCount
 		ConfigHash = Get-Hash $configRows
 		AgentHash = Get-Hash $agentRows
 		ArchiveRows = $archiveRows
@@ -213,12 +245,14 @@ function Test-ProcedureCompilationAndSmoke {
 SET NOCOUNT ON;
 BEGIN TRANSACTION;
 BEGIN TRY
+  EXEC sys.sp_refreshsqlmodule N'dbo.ufn_EvaluatePartitionCapacity';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_ManagePartitions';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_InitializeDatabase';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_GetArchiveSummary';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_ArchiveQueryStore';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_MaterializeCanonicalQueryStoreStats';
   EXEC sys.sp_refreshsqlmodule N'dbo.usp_PurgeExpiredArchives';
+  EXEC sys.sp_refreshview N'dbo.vw_QueryVaultStorageRecommendation';
   EXEC sys.sp_refreshview N'qv_report.periods';
   EXEC sys.sp_refreshview N'qv_report.query_period_metrics';
   EXEC sys.sp_refreshview N'qv_report.period_metrics';
@@ -241,6 +275,11 @@ BEGIN TRANSACTION;
 BEGIN TRY
   SELECT COUNT_BIG(*) AS ConfigRows FROM dbo.DatabaseConfig;
   SELECT COUNT_BIG(*) AS RunRows FROM dbo.RunMetadata;
+  SELECT CanAllocate,SqlServerPartitionLimit,OperationalPartitionLimit
+  FROM dbo.ufn_EvaluatePartitionCapacity(1,1000,80,100,2);
+  SELECT TOP (2) ConfigID,FactType,SuggestedStorageMode
+  FROM dbo.vw_QueryVaultStorageRecommendation
+  ORDER BY ConfigID,FactType;
   SELECT TOP (1) RunID,`$PARTITION.PF_RunID(RunID) AS PartitionNumber
   FROM dbo.RunMetadata
   ORDER BY RunID DESC;
@@ -295,6 +334,9 @@ if ($Mode -eq "Pre") {
 Assert-Condition (Test-Path -LiteralPath $BaselinePath -PathType Leaf) "Baseline file not found: $BaselinePath"
 Assert-Condition ($snapshot.MissingCanonicalObjectCount -eq 0) "One or more canonical aggregation objects are missing."
 Assert-Condition ($snapshot.MissingReportingObjectCount -eq 0) "One or more required qv_report objects are missing."
+Assert-Condition ($snapshot.MissingLifecycleObjectCount -eq 0) "One or more required RunID lifecycle objects are missing."
+Assert-Condition $snapshot.LifecycleConfigColumnsExist "One or more required RunID lifecycle configuration columns are missing."
+Assert-Condition ($snapshot.InvalidLifecycleConfigCount -eq 0) "DatabaseConfig contains invalid RunID lifecycle settings."
 $baseline = Get-Content -LiteralPath $BaselinePath -Raw | ConvertFrom-Json
 Assert-Condition ($baseline.DatabaseName -eq $snapshot.DatabaseName) "Baseline database does not match the target database."
 Assert-Condition ($baseline.ConfigHash -eq $snapshot.ConfigHash) "DatabaseConfig settings changed during deployment."

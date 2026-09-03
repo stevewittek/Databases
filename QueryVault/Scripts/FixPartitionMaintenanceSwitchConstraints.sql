@@ -4,9 +4,6 @@
     ALTER TABLE ... SWITCH, so they prevent retention cleanup.
 */
 
-USE [QueryVaultDB];
-GO
-
 SET NOCOUNT ON;
 
 DECLARE @Constraints TABLE

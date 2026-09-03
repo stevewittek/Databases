@@ -25,6 +25,14 @@ CREATE TABLE dbo.DatabaseConfig
 	-- Retention policy
 	DefaultRetentionDays INT NOT NULL DEFAULT 365, -- How long to keep archived data
 	AutoDeleteEnabled BIT NOT NULL DEFAULT 0, -- Auto-delete based on retention
+	MaxRetainedRuns INT NOT NULL
+		CONSTRAINT DF_DatabaseConfig_MaxRetainedRuns DEFAULT 1000,
+	PartitionWarningPct TINYINT NOT NULL
+		CONSTRAINT DF_DatabaseConfig_PartitionWarningPct DEFAULT 80,
+
+	-- Physical storage preference. AUTO is advisory in this release.
+	StorageMode NVARCHAR(20) NOT NULL
+		CONSTRAINT DF_DatabaseConfig_StorageMode DEFAULT N'AUTO',
 
 	-- Additional settings
 	MaxRowsPerBatch INT NOT NULL DEFAULT 100000, -- Batch size for archiving
@@ -42,7 +50,10 @@ CREATE TABLE dbo.DatabaseConfig
 	CONSTRAINT CK_DatabaseConfig_ScheduleType CHECK (ScheduleType IN ('Daily', 'Weekly', 'Monthly', 'OnDemand')),
 	CONSTRAINT CK_DatabaseConfig_CompressionDelay CHECK (CompressionDelayMinutes >= 0),
 	CONSTRAINT CK_DatabaseConfig_DaysToArchive CHECK (DefaultDaysToArchive > 0),
-	CONSTRAINT CK_DatabaseConfig_RetentionDays CHECK (DefaultRetentionDays > 0)
+	CONSTRAINT CK_DatabaseConfig_RetentionDays CHECK (DefaultRetentionDays > 0),
+	CONSTRAINT CK_DatabaseConfig_MaxRetainedRuns CHECK (MaxRetainedRuns BETWEEN 1 AND 14990),
+	CONSTRAINT CK_DatabaseConfig_PartitionWarningPct CHECK (PartitionWarningPct BETWEEN 50 AND 95),
+	CONSTRAINT CK_DatabaseConfig_StorageMode CHECK (StorageMode IN (N'AUTO', N'ROWSTORE', N'COLUMNSTORE'))
 );
 GO
 CREATE NONCLUSTERED INDEX IX_DatabaseConfig_Enabled 

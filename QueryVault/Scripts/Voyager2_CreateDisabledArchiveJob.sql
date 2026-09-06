@@ -66,6 +66,10 @@ GRANT INSERT, ALTER ON dbo.query_store_plan TO [queryvault_executor];
 GRANT INSERT, ALTER ON dbo.query_store_runtime_stats TO [queryvault_executor];
 GRANT INSERT, ALTER ON dbo.query_store_runtime_stats_interval TO [queryvault_executor];
 GRANT INSERT, ALTER ON dbo.query_store_wait_stats TO [queryvault_executor];
+GRANT INSERT, ALTER ON dbo.query_store_runtime_stats_contributor TO [queryvault_executor];
+GRANT INSERT, ALTER ON dbo.query_store_runtime_stats_canonical TO [queryvault_executor];
+GRANT INSERT, ALTER ON dbo.query_store_wait_stats_contributor TO [queryvault_executor];
+GRANT INSERT, ALTER ON dbo.query_store_wait_stats_canonical TO [queryvault_executor];
 
 GRANT ALTER ON dbo.query_store_query_PartitionMaintenance TO [queryvault_executor];
 GRANT ALTER ON dbo.query_store_query_text_PartitionMaintenance TO [queryvault_executor];
@@ -73,6 +77,10 @@ GRANT ALTER ON dbo.query_store_plan_PartitionMaintenance TO [queryvault_executor
 GRANT ALTER ON dbo.query_store_runtime_stats_PartitionMaintenance TO [queryvault_executor];
 GRANT ALTER ON dbo.query_store_runtime_stats_interval_PartitionMaintenance TO [queryvault_executor];
 GRANT ALTER ON dbo.query_store_wait_stats_PartitionMaintenance TO [queryvault_executor];
+GRANT ALTER ON dbo.query_store_runtime_stats_contributor_PartitionMaintenance TO [queryvault_executor];
+GRANT ALTER ON dbo.query_store_runtime_stats_canonical_PartitionMaintenance TO [queryvault_executor];
+GRANT ALTER ON dbo.query_store_wait_stats_contributor_PartitionMaintenance TO [queryvault_executor];
+GRANT ALTER ON dbo.query_store_wait_stats_canonical_PartitionMaintenance TO [queryvault_executor];
 
 -- Required only when usp_ArchiveQueryStore extends PF_RunID/PS_RunID.
 GRANT ALTER ANY DATASPACE TO [queryvault_executor];
@@ -148,26 +156,46 @@ SET NOCOUNT ON;
 
 DECLARE @DatabaseName NVARCHAR(128);
 DECLARE @RunName NVARCHAR(255);
+DECLARE @StartDateTime DATETIME2(7);
+DECLARE @EndDateTime DATETIME2(7);
+DECLARE @DefaultDaysToArchive INT;
 DECLARE @FailureCount INT = 0;
 
 DECLARE database_cursor CURSOR LOCAL FAST_FORWARD FOR
-SELECT DatabaseName
+SELECT DatabaseName, DefaultDaysToArchive
 FROM dbo.DatabaseConfig
 WHERE IsEnabled = 1
   AND ServerName = @@SERVERNAME
 ORDER BY DatabaseName;
 
 OPEN database_cursor;
-FETCH NEXT FROM database_cursor INTO @DatabaseName;
+FETCH NEXT FROM database_cursor INTO @DatabaseName, @DefaultDaysToArchive;
 
 WHILE @@FETCH_STATUS = 0
 BEGIN
     BEGIN TRY
-        SET @RunName = N''SQL Agent daily archive - '' + CONVERT(NVARCHAR(30), SYSUTCDATETIME(), 126);
+        SET @EndDateTime = SYSUTCDATETIME();
+
+        SELECT @StartDateTime = MAX(EndDateTime)
+        FROM dbo.RunMetadata
+        WHERE SourceDatabaseName = @DatabaseName
+          AND SourceServerName = @@SERVERNAME
+          AND RunStatus = N''Completed'';
+
+        SET @StartDateTime = ISNULL(
+            @StartDateTime,
+            DATEADD(DAY, -@DefaultDaysToArchive, @EndDateTime)
+        );
+        SET @RunName = N''SQL Agent archive - ''
+            + CONVERT(NVARCHAR(30), @StartDateTime, 126)
+            + N'' through ''
+            + CONVERT(NVARCHAR(30), @EndDateTime, 126);
 
         EXEC dbo.usp_ArchiveQueryStore
             @SourceDatabaseName = @DatabaseName,
             @RunName = @RunName,
+            @StartDateTime = @StartDateTime,
+            @EndDateTime = @EndDateTime,
             @DoNotDelete = 0;
     END TRY
     BEGIN CATCH
@@ -175,7 +203,7 @@ BEGIN
         PRINT N''QueryVault archive failed for '' + QUOTENAME(@DatabaseName) + N'': '' + ERROR_MESSAGE();
     END CATCH;
 
-    FETCH NEXT FROM database_cursor INTO @DatabaseName;
+    FETCH NEXT FROM database_cursor INTO @DatabaseName, @DefaultDaysToArchive;
 END;
 
 CLOSE database_cursor;

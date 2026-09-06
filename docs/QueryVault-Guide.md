@@ -39,6 +39,22 @@ EXEC dbo.usp_ArchiveQueryStore
     @DoNotDelete = 1;
 ```
 
+For a relative period, pass the duration in minutes. The duration is measured
+backward from the safely flushed Query Store endpoint, so `60` captures one
+complete hour and `1440` captures one complete day:
+
+```sql
+EXEC dbo.usp_ArchiveQueryStore
+    @SourceDatabaseName = N'YourDatabase',
+    @RunName = N'Last safely completed hour',
+    @LookbackMinutes = 60,
+    @DoNotDelete = 0;
+```
+
+Do not combine `@LookbackMinutes` with `@StartDateTime`. An explicit
+`@EndDateTime` may be combined with `@LookbackMinutes` to anchor a relative
+period in the past.
+
 The effective end is capped at one source Query Store flush interval before
 current UTC time. If the requested range contains no safely flushed interval,
 the procedure fails. Every native runtime/wait contributor is retained, then
@@ -47,6 +63,11 @@ native rows are not silently discarded or treated as complete observations.
 
 Use `@DoNotDelete = 1` for a deliberately protected baseline. QueryVault does
 not infer a period classification from `RunName`.
+
+The supported SQL Agent jobs pass explicit start and end timestamps. They
+resume from the latest `Completed` period endpoint for each source, so a failed
+night is automatically included in the next successful run. For a source with
+no completed period, the job falls back to `DefaultDaysToArchive`.
 
 ## Inspect archive state
 

@@ -128,6 +128,9 @@ Assert-Condition (-not $archiveProcedure.Contains("@RunID - @MaxRunIDInFunction"
 Assert-Condition ($archiveProcedure.Contains("query_store_runtime_stats_contributor")) "Runtime contributor capture is missing."
 Assert-Condition ($archiveProcedure.Contains("query_store_wait_stats_contributor")) "Wait contributor capture is missing."
 Assert-Condition ($archiveProcedure.Contains("usp_MaterializeCanonicalQueryStoreStats")) "Canonical materialization call is missing."
+Assert-Condition ($archiveProcedure.Contains("@LookbackMinutes INT = NULL")) "Relative capture lookback parameter is missing."
+Assert-Condition ($archiveProcedure.Contains("DATEADD(MINUTE, -@LookbackMinutes, @ActualEndDateTime)")) "Relative capture lookback is not based on the safely flushed endpoint."
+Assert-Condition ($archiveProcedure.Contains("Specify either @LookbackMinutes or @StartDateTime, not both.")) "Ambiguous relative/explicit capture input guard is missing."
 Assert-Condition (-not $archiveProcedure.Contains("Multiple Query Store runtime-stat rows exist at the documented aggregation grain")) "Obsolete runtime duplicate rejection remains."
 Assert-Condition (-not $archiveProcedure.Contains("Multiple Query Store wait-stat rows exist at the documented aggregation grain")) "Obsolete wait duplicate rejection remains."
 
@@ -144,6 +147,22 @@ foreach ($tableName in @(
     "query_store_wait_stats_canonical.sql"
 )) {
     Assert-Condition (Test-Path -LiteralPath (Join-Path $projectRoot "Tables\QueryStore\$tableName") -PathType Leaf) "Missing additive aggregation table: $tableName"
+}
+
+$voyagerJob = Get-Content -LiteralPath (Join-Path $projectRoot "Scripts\Voyager2_CreateDisabledArchiveJob.sql") -Raw
+Assert-Condition ($voyagerJob.Contains("SELECT @StartDateTime = MAX(EndDateTime)")) "Voyager2 job does not resume from the latest completed endpoint."
+Assert-Condition ($voyagerJob.Contains("AND RunStatus = N''Completed''")) "Voyager2 job checkpoint is not restricted to completed periods."
+Assert-Condition ($voyagerJob.Contains("@StartDateTime = @StartDateTime")) "Voyager2 job does not pass its checkpoint start to the archive procedure."
+Assert-Condition ($voyagerJob.Contains("@EndDateTime = @EndDateTime")) "Voyager2 job does not pass its requested endpoint to the archive procedure."
+
+foreach ($tableName in @(
+    "query_store_runtime_stats_contributor",
+    "query_store_runtime_stats_canonical",
+    "query_store_wait_stats_contributor",
+    "query_store_wait_stats_canonical"
+)) {
+    Assert-Condition ($voyagerJob.Contains("GRANT INSERT, ALTER ON dbo.$tableName TO [queryvault_executor];")) "Voyager2 executor permission is missing for $tableName."
+    Assert-Condition ($voyagerJob.Contains("GRANT ALTER ON dbo.${tableName}_PartitionMaintenance TO [queryvault_executor];")) "Voyager2 maintenance permission is missing for $tableName."
 }
 
 $queryMetricsView = Get-Content -LiteralPath (Join-Path $projectRoot "Views\qv_report.query_period_metrics.sql") -Raw

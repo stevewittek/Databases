@@ -33,6 +33,10 @@ BEGIN TRY
 	IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%i.end_time <= @EndDateTime%'
 		THROW 51101, 'Capture regression: completed interval end-time filter is missing.', 1;
 
+	IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%@LookbackMinutes%'
+		OR OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%DATEADD(MINUTE, -@LookbackMinutes, @ActualEndDateTime)%'
+		THROW 51109, 'Capture regression: relative lookback period support is missing.', 1;
+
 	IF OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%query_store_runtime_stats_contributor%'
 		OR OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%query_store_wait_stats_contributor%'
 		OR OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore', N'P')) NOT LIKE N'%usp_MaterializeCanonicalQueryStoreStats%'

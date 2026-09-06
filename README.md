@@ -127,6 +127,12 @@ EXEC QueryVaultDB.dbo.usp_ArchiveQueryStore
     @DoNotDelete = 1;
 ```
 
+`usp_ArchiveQueryStore` accepts either an exact UTC window through
+`@StartDateTime` and `@EndDateTime`, or a relative safely completed duration
+through `@LookbackMinutes` (`60` for one hour, `1440` for one day). Supported
+SQL Agent jobs resume from the latest completed endpoint so a failed run does
+not leave an uncollected gap.
+
 ## Safety notes
 
 - Test restores and deployments outside production first.

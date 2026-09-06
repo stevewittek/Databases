@@ -6,8 +6,9 @@ QueryVault copies Query Store information from one or more source databases into
 
 > **Project status:** Active. Core archiving and retention are implemented. The
 > version-controlled Grafana V1 package and `qv_report` API are implemented and
-> validated against a production-shaped archive, but are not yet deployed on
-> Voyager2. Review [current state](docs/CURRENT_STATE.md) before deployment.
+> validated against a production-shaped archive on Voyager2. The guarded
+> production workflow has deployed the current `master`; review
+> [current state](docs/CURRENT_STATE.md) before subsequent changes.
 
 ## Why I built this
 

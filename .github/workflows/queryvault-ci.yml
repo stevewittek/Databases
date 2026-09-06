@@ -1,0 +1,71 @@
+name: QueryVault Pull Request CI
+
+on:
+  pull_request:
+    paths:
+      - "QueryVault/**"
+      - "grafana/**"
+      - "docs/**"
+      - "README.md"
+      - ".github/workflows/queryvault-*.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  static-validation:
+    name: Repository and static validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run QueryVault repository contracts
+        shell: pwsh
+        run: >-
+          ./QueryVault/Tests/TestRepositoryContracts.ps1
+
+      - name: Validate PowerShell syntax
+        shell: pwsh
+        run: |
+          $parseFailures = @()
+
+          Get-ChildItem -LiteralPath ./QueryVault -Recurse -File -Filter *.ps1 |
+            ForEach-Object {
+              $path = $_.FullName
+              $tokens = $null
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile(
+                $path,
+                [ref]$tokens,
+                [ref]$errors
+              ) | Out-Null
+
+              foreach ($parseError in $errors) {
+                $parseFailures += "${path}:$($parseError.Extent.StartLineNumber): $($parseError.Message)"
+              }
+            }
+
+          if ($parseFailures.Count -gt 0) {
+            throw ($parseFailures -join [Environment]::NewLine)
+          }
+
+      - name: Validate dashboard JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          find grafana/dashboards -type f -name '*.json' -print0 |
+            xargs -0 -n 1 jq empty
+
+      - name: Validate workflow and provisioning YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) }' \
+            .github/workflows/*.yml \
+            grafana/provisioning/dashboards/*.yaml \
+            grafana/provisioning/datasources/*.yaml

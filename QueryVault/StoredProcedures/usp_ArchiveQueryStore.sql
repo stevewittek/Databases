@@ -14,7 +14,8 @@ CREATE OR ALTER PROCEDURE dbo.usp_ArchiveQueryStore
 	@EndDateTime DATETIME2(7) = NULL,
 	@DoNotDelete BIT = 0,
 	@RetentionDays INT = NULL,
-	@BatchSize INT = NULL
+	@BatchSize INT = NULL,
+	@LookbackMinutes INT = NULL
 AS
 BEGIN
 	SET NOCOUNT ON;
@@ -37,6 +38,12 @@ BEGIN
 	DECLARE @WaitReplicaGroupProjection NVARCHAR(128);
 
 	BEGIN TRY
+		IF @LookbackMinutes IS NOT NULL AND @LookbackMinutes <= 0
+			THROW 51004, '@LookbackMinutes must be greater than zero.', 1;
+
+		IF @LookbackMinutes IS NOT NULL AND @StartDateTime IS NOT NULL
+			THROW 51005, 'Specify either @LookbackMinutes or @StartDateTime, not both.', 1;
+
 		-- Get configuration for the database
 		DECLARE @ConfigID INT;
 		DECLARE @DefaultDaysToArchive INT;
@@ -75,10 +82,14 @@ BEGIN
 			WHEN @RequestedEndDateTime < @SafeQueryStoreCutoff THEN @RequestedEndDateTime
 			ELSE @SafeQueryStoreCutoff
 		END;
-		SET @ActualStartDateTime = ISNULL(
-			@StartDateTime,
-			DATEADD(DAY, -@DefaultDaysToArchive, @ActualEndDateTime)
-		);
+		SET @ActualStartDateTime = CASE
+			WHEN @LookbackMinutes IS NOT NULL
+				THEN DATEADD(MINUTE, -@LookbackMinutes, @ActualEndDateTime)
+			ELSE ISNULL(
+				@StartDateTime,
+				DATEADD(DAY, -@DefaultDaysToArchive, @ActualEndDateTime)
+			)
+		END;
 
 		IF @ActualEndDateTime < @ActualStartDateTime
 			THROW 51003, 'The requested archive range does not contain a safely flushed Query Store interval.', 1;

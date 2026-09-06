@@ -125,6 +125,21 @@ EXEC QueryVaultDB.dbo.usp_ArchiveQueryStore
 	@RetentionDays = 90;
 ```
 
+### Archive the Last Safely Completed Hour
+
+```sql
+EXEC QueryVaultDB.dbo.usp_ArchiveQueryStore
+	@SourceDatabaseName = 'MyDatabase',
+	@RunName = 'Last completed hour',
+	@LookbackMinutes = 60,
+	@DoNotDelete = 0;
+```
+
+Use `@LookbackMinutes = 1440` for one day. For an exact historical period,
+continue to pass `@StartDateTime` and `@EndDateTime`. The SQL Agent jobs use
+the latest completed endpoint as their next start time and therefore catch up
+automatically after a failed scheduled run.
+
 ### Query Archived Data
 
 ```sql

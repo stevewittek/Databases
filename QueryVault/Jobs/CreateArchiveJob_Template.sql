@@ -65,10 +65,24 @@ BEGIN
 	RETURN;
 END
 
--- Set date range for archiving
+-- Resume from the last successfully archived endpoint. This closes any gap
+-- left by a failed scheduled run. Use the configured lookback only when this
+-- source has no completed archive yet.
 SET @EndDateTime = SYSUTCDATETIME();
-SET @StartDateTime = DATEADD(DAY, -@DaysToArchive, @EndDateTime);
-SET @RunName = ''Scheduled Archive - '' + CONVERT(VARCHAR(30), @EndDateTime, 120);
+SELECT @StartDateTime = MAX(EndDateTime)
+FROM dbo.RunMetadata
+WHERE SourceDatabaseName = ''@DatabaseName''
+  AND SourceServerName = @@SERVERNAME
+  AND RunStatus = N''Completed'';
+
+SET @StartDateTime = ISNULL(
+	@StartDateTime,
+	DATEADD(DAY, -@DaysToArchive, @EndDateTime)
+);
+SET @RunName = ''Scheduled Archive - ''
+	+ CONVERT(VARCHAR(30), @StartDateTime, 126)
+	+ '' through ''
+	+ CONVERT(VARCHAR(30), @EndDateTime, 126);
 
 -- Execute archive procedure
 EXEC dbo.usp_ArchiveQueryStore

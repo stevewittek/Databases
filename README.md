@@ -6,9 +6,9 @@ QueryVault copies Query Store information from one or more source databases into
 
 ## A 90-second project tour
 
-**The problem:** SQL Server Query Store history can roll off during retention cleanup or after storage limits are reached, making regressions harder to investigate weeks or months later.
+**The problem:** SQL Server Query Store history can roll off, be cleared during database refreshes or load-test resets, or disappear as storage limits are reached. This can erase the baseline before a quarter-long optimization effort has finished.
 
-**The engineering response:** QueryVault captures completed Query Store intervals into a separate SQL Server archive, tracks each retained period, controls retention through RunID-based partition management, and exposes stable SQL reporting objects to Grafana. It is an archive and analysis project, **not** a replacement for Query Store or a live monitoring service.
+**The engineering response:** QueryVault captures selected completed Query Store intervals **before they disappear**, preserves comparable baseline and follow-up periods in a separate SQL Server archive, controls retention through RunID-based partition management, and exposes stable SQL reporting objects to Grafana. It is an archive and analysis project, **not** a replacement for Query Store or a live monitoring service.
 
 **What a reviewer can verify:** T-SQL procedures, a SQL database project, partitioned columnstore tables, protected retention, SQL Agent scheduling, a least-privilege `qv_report` contract, Grafana dashboards, and documented deployment/validation checks.
 
@@ -47,6 +47,7 @@ QueryVaultDB: metadata + RunID-partitioned historical facts
 
 | Looking for | Review this |
 | --- | --- |
+| Why it matters | [Preserving load-test baselines and comparing July to October](docs/USE_CASES.md) |
 | Architecture and tradeoffs | [Architecture](docs/Architecture.md) and [current implementation boundary](docs/CURRENT_STATE.md) |
 | T-SQL and database project | [QueryVault source](QueryVault/) and [stored procedures](QueryVault/StoredProcedures/) |
 | Reporting and observability | [Grafana setup](docs/Grafana-Setup.md) and [provisioned dashboards](grafana/) |
@@ -65,6 +66,8 @@ QueryVaultDB: metadata + RunID-partitioned historical facts
 > [current state](docs/CURRENT_STATE.md) before subsequent changes.
 
 ## Why I built this
+
+The motivating use case was preserving Query Store evidence from load tests and database refreshes, then comparing baseline and later performance after substantial tuning or technical-debt work. Think of a July baseline and an October follow-up after a quarter of changes. If the original database is overwritten or its Query Store history ages out, the baseline disappears unless it was captured beforehand. [See the detailed before-and-after story](docs/USE_CASES.md).
 
 SQL Server Query Store is extremely useful for investigating regressions and understanding workload behavior, but its data can age out or be removed as storage limits are reached. QueryVault explores a practical solution: periodically archive that performance history into a purpose-built database where it can be retained, protected, queried, and maintained independently.
 

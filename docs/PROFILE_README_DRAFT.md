@@ -23,7 +23,7 @@ Based in New Jersey | Open to senior full-time database engineering and platform
 
 A SQL Server engineering project designed to preserve completed Query Store history for investigation beyond the source database's retention window. Includes RunID-partitioned historical storage, metadata-driven retention, stored procedures, SQL Agent automation, and Grafana dashboards through a stable reporting contract.
 
-**Explore:** [project tour and screenshots](https://github.com/stevewittek/Databases#)
+**Explore:** [project tour and screenshots](https://github.com/stevewittek/Databases)
 
 **Evidence:** [real lab captures](https://github.com/stevewittek/Databases/blob/master/docs/SCREENSHOT_PLAN.md) | [documented release-candidate validation](https://github.com/stevewittek/Databases/blob/master/docs/VALIDATION_REPORT.md)
 

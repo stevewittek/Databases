@@ -4,6 +4,61 @@ A SQL Server database project for preserving, organizing, and analyzing historic
 
 QueryVault copies Query Store information from one or more source databases into a centralized archive. It is designed to support longer-term performance analysis when the source database's built-in Query Store retention window is not enough. The project combines T-SQL, SQL Server Data Tools project structure, PowerShell deployment helpers, table partitioning, clustered columnstore indexes, and SQL Server Agent automation.
 
+## A 90-second project tour
+
+**The problem:** SQL Server Query Store history can roll off, be cleared during database refreshes or load-test resets, or disappear as storage limits are reached. This can erase the baseline before a quarter-long optimization effort has finished.
+
+**The engineering response:** QueryVault captures selected completed Query Store intervals **before they disappear**, preserves comparable baseline and follow-up periods in a separate SQL Server archive, controls retention through RunID-based partition management, and exposes stable SQL reporting objects to Grafana. It is an archive and analysis project, **not** a replacement for Query Store or a live monitoring service.
+
+**What a reviewer can verify:** T-SQL procedures, a SQL database project, partitioned columnstore tables, protected retention, SQL Agent scheduling, a least-privilege `qv_report` contract, Grafana dashboards, and documented deployment/validation checks.
+
+### Screenshots from a validated SQL Server lab
+
+These are actual September 2026 captures using the WideWorldImporters sample database, not conceptual mockups. They are included in source control so the project can be reviewed without access to my lab.
+
+![QueryVault archived-period overview with workload KPIs and Query Store history](docs/images/grafana-overview-period.jpg)
+
+*Archived period overview: completed capture, query and plan counts, CPU, duration, reads, and wait data.*
+
+![QueryVault baseline versus comparison period with query changes](docs/images/grafana-period-comparison.jpg)
+
+*Comparing two completed archive periods to investigate performance changes.*
+
+[Wait analysis screenshot](docs/images/grafana-wait-analysis.jpg) | [Query detail screenshot](docs/images/grafana-query-detail.jpg) | [Screenshot provenance and test scope](docs/SCREENSHOT_PLAN.md)
+
+### How the pieces fit together
+
+```text
+SQL Server database (Query Store)
+              |
+      Scheduled T-SQL capture
+              |
+              v
+QueryVaultDB: metadata + RunID-partitioned historical facts
+              |
+       qv_report SQL contract
+              |
+              v
+       Grafana OSS dashboards
+  (period trends, comparisons, waits, queries)
+```
+
+### Start with the evidence
+
+| Looking for | Review this |
+| --- | --- |
+| Why it matters | [Preserving load-test baselines and comparing July to October](docs/USE_CASES.md) |
+| Architecture and tradeoffs | [Architecture](docs/Architecture.md) and [current implementation boundary](docs/CURRENT_STATE.md) |
+| T-SQL and database project | [QueryVault source](QueryVault/) and [stored procedures](QueryVault/StoredProcedures/) |
+| Reporting and observability | [Grafana setup](docs/Grafana-Setup.md) and [provisioned dashboards](grafana/) |
+| Installation and safety | [Installation](docs/Installation.md), [operator guide](docs/QueryVault-Guide.md) |
+| Testing and real validation | [September 2026 validation report](docs/VALIDATION_REPORT.md) |
+| Product context | [QueryVault at Netherwood Data Partners](https://netherwooddatapartners.com/products/queryvault/) |
+
+**Validation boundary:** The September 2026 release candidate was deployed and exercised in my Voyager2 lab. The report records successful archive preservation, partition lifecycle checks, reporting tests, and all 49 Grafana template/panel queries. It does not certify unrestricted production deployment or graphical SSMS plan rendering. See the [full acceptance report](docs/VALIDATION_REPORT.md) for exact results and limitations.
+
+---
+
 > **Project status:** Active. Core archiving and retention are implemented. The
 > version-controlled Grafana V1 package and `qv_report` API are implemented and
 > validated against a production-shaped archive on Voyager2. The guarded
@@ -11,6 +66,8 @@ QueryVault copies Query Store information from one or more source databases into
 > [current state](docs/CURRENT_STATE.md) before subsequent changes.
 
 ## Why I built this
+
+The motivating use case was preserving Query Store evidence from load tests and database refreshes, then comparing baseline and later performance after substantial tuning or technical-debt work. Think of a July baseline and an October follow-up after a quarter of changes. If the original database is overwritten or its Query Store history ages out, the baseline disappears unless it was captured beforehand. [See the detailed before-and-after story](docs/USE_CASES.md).
 
 SQL Server Query Store is extremely useful for investigating regressions and understanding workload behavior, but its data can age out or be removed as storage limits are reached. QueryVault explores a practical solution: periodically archive that performance history into a purpose-built database where it can be retained, protected, queried, and maintained independently.
 

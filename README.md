@@ -4,6 +4,60 @@ A SQL Server database project for preserving, organizing, and analyzing historic
 
 QueryVault copies Query Store information from one or more source databases into a centralized archive. It is designed to support longer-term performance analysis when the source database's built-in Query Store retention window is not enough. The project combines T-SQL, SQL Server Data Tools project structure, PowerShell deployment helpers, table partitioning, clustered columnstore indexes, and SQL Server Agent automation.
 
+## A 90-second project tour
+
+**The problem:** SQL Server Query Store history can roll off during retention cleanup or after storage limits are reached, making regressions harder to investigate weeks or months later.
+
+**The engineering response:** QueryVault captures completed Query Store intervals into a separate SQL Server archive, tracks each retained period, controls retention through RunID-based partition management, and exposes stable SQL reporting objects to Grafana. It is an archive and analysis project, **not** a replacement for Query Store or a live monitoring service.
+
+**What a reviewer can verify:** T-SQL procedures, a SQL database project, partitioned columnstore tables, protected retention, SQL Agent scheduling, a least-privilege `qv_report` contract, Grafana dashboards, and documented deployment/validation checks.
+
+### Screenshots from a validated SQL Server lab
+
+These are actual September 2026 captures using the WideWorldImporters sample database, not conceptual mockups. They are included in source control so the project can be reviewed without access to my lab.
+
+![QueryVault archived-period overview with workload KPIs and Query Store history](docs/images/grafana-overview-period.jpg)
+
+*Archived period overview: completed capture, query and plan counts, CPU, duration, reads, and wait data.*
+
+![QueryVault baseline versus comparison period with query changes](docs/images/grafana-period-comparison.jpg)
+
+*Comparing two completed archive periods to investigate performance changes.*
+
+[Wait analysis screenshot](docs/images/grafana-wait-analysis.jpg) | [Query detail screenshot](docs/images/grafana-query-detail.jpg) | [Screenshot provenance and test scope](docs/SCREENSHOT_PLAN.md)
+
+### How the pieces fit together
+
+```text
+SQL Server database (Query Store)
+              |
+      Scheduled T-SQL capture
+              |
+              v
+QueryVaultDB: metadata + RunID-partitioned historical facts
+              |
+       qv_report SQL contract
+              |
+              v
+       Grafana OSS dashboards
+  (period trends, comparisons, waits, queries)
+```
+
+### Start with the evidence
+
+| Looking for | Review this |
+| --- | --- |
+| Architecture and tradeoffs | [Architecture](docs/Architecture.md) and [current implementation boundary](docs/CURRENT_STATE.md) |
+| T-SQL and database project | [QueryVault source](QueryVault/) and [stored procedures](QueryVault/StoredProcedures/) |
+| Reporting and observability | [Grafana setup](docs/Grafana-Setup.md) and [provisioned dashboards](grafana/) |
+| Installation and safety | [Installation](docs/Installation.md), [operator guide](docs/QueryVault-Guide.md) |
+| Testing and real validation | [September 2026 validation report](docs/VALIDATION_REPORT.md) |
+| Product context | [QueryVault at Netherwood Data Partners](https://netherwooddatapartners.com/products/queryvault/) |
+
+**Validation boundary:** The September 2026 release candidate was deployed and exercised in my Voyager2 lab. The report records successful archive preservation, partition lifecycle checks, reporting tests, and all 49 Grafana template/panel queries. It does not certify unrestricted production deployment or graphical SSMS plan rendering. See the [full acceptance report](docs/VALIDATION_REPORT.md) for exact results and limitations.
+
+---
+
 > **Project status:** Active. Core archiving and retention are implemented. The
 > version-controlled Grafana V1 package and `qv_report` API are implemented and
 > validated against a production-shaped archive on Voyager2. The guarded

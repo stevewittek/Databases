@@ -16,15 +16,15 @@ QueryVault copies Query Store information from one or more source databases into
 
 These are actual September 2026 captures using the WideWorldImporters sample database, not conceptual mockups. They are included in source control so the project can be reviewed without access to my lab.
 
-![QueryVault archived-period overview with workload KPIs and Query Store history](docs/images/grafana-overview-period.jpg)
+| Historical workload overview | Archived baseline comparison |
+| :---: | :---: |
+| [![Actual archived Query Store workload metrics in Grafana](docs/images/grafana-overview-period.jpg)](docs/images/grafana-overview-period.jpg) | [![Actual Query Store performance comparison between archived periods](docs/images/grafana-period-comparison.jpg)](docs/images/grafana-period-comparison.jpg) |
+| **Overview:** retained queries, plans, CPU, duration, reads and waits | **Period comparison:** query-level regressions, improvements and workload changes |
+| Wait analysis | Query detail |
+| [![Actual SQL Server Query Store wait category analysis](docs/images/grafana-wait-analysis.jpg)](docs/images/grafana-wait-analysis.jpg) | [![Actual archived query detail with runtime metrics and plan metadata](docs/images/grafana-query-detail.jpg)](docs/images/grafana-query-detail.jpg) |
+| **Wait analysis:** investigate shifts in wait categories | **Query detail:** examine a query across saved archive periods |
 
-*Archived period overview: completed capture, query and plan counts, CPU, duration, reads, and wait data.*
-
-![QueryVault baseline versus comparison period with query changes](docs/images/grafana-period-comparison.jpg)
-
-*Comparing two completed archive periods to investigate performance changes.*
-
-[Wait analysis screenshot](docs/images/grafana-wait-analysis.jpg) | [Query detail screenshot](docs/images/grafana-query-detail.jpg) | [Screenshot provenance and test scope](docs/SCREENSHOT_PLAN.md)
+*All four images are actual September 2026 lab captures from the WideWorldImporters sample database. They are not fabricated production outcomes. See the [screenshot evidence and capture notes](docs/SCREENSHOT_PLAN.md) and [validation report](docs/VALIDATION_REPORT.md).*
 
 ### How the pieces fit together
 

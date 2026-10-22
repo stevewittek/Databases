@@ -32,6 +32,12 @@ The implementation includes **T-SQL stored procedures, partitioned columnstore h
 
 [PageMover](https://netherwooddatapartners.com/products/sql-server-index-maintenance-visualizer/) is a local SQL Server index and heap analysis utility with a Windows 95/98-inspired physical-page visualizer. It separates read-only inspection from maintenance, shows the proposed SQL, and requires deliberate confirmation before execution.
 
+[![Actual PageMover application screenshot using synthetic offline demonstration data](https://raw.githubusercontent.com/stevewittek/Toolkit/main/assets/pagemover-demo.png)](https://github.com/stevewittek/Toolkit/blob/main/docs/PAGEMOVER_OVERVIEW.md)
+
+*Actual PageMover interface; synthetic test values and index pages, not an operating production database.*
+
+**Explore:** [Design, safety and demo walkthrough](https://github.com/stevewittek/Toolkit/blob/main/docs/PAGEMOVER_OVERVIEW.md) | [Product overview](https://netherwooddatapartners.com/products/sql-server-index-maintenance-visualizer/)
+
 The source is currently private while release and security checks are completed. This is an **unsigned developer preview**, not a production-certified maintenance product.
 
 ### [Netherwood Data Partners: software and database engineering](https://github.com/stevewittek/netherwood-data-partners)

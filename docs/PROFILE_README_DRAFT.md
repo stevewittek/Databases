@@ -20,11 +20,18 @@ It captures selected, completed **SQL Server Query Store** periods into a separa
 
 The implementation includes **T-SQL stored procedures, partitioned columnstore history, retention safeguards, SQL Server Agent automation, a stable reporting interface and Grafana dashboards**.
 
-| Archived workload overview | Before-and-after period comparison |
-| :---: | :---: |
-| [![Actual Grafana archive overview from a controlled SQL Server lab](https://raw.githubusercontent.com/stevewittek/Databases/master/docs/images/grafana-overview-period.jpg)](https://github.com/stevewittek/Databases/blob/master/docs/SCREENSHOT_PLAN.md) | [![Actual Grafana archived-period comparison from a controlled SQL Server lab](https://raw.githubusercontent.com/stevewittek/Databases/master/docs/images/grafana-period-comparison.jpg)](https://github.com/stevewittek/Databases/blob/master/docs/SCREENSHOT_PLAN.md) |
+```mermaid
+flowchart LR
+    Q["SQL Server Query Store"] --> C["Capture selected completed periods"]
+    C --> A["QueryVaultDB: retained RunID history"]
+    A --> R["qv_report contract"]
+    R --> G["Grafana: periods, comparisons, waits, queries"]
+    A --> P["Protected baselines and retention controls"]
+```
 
-*Actual September 2026 SQL Server lab captures using the WideWorldImporters sample database, not fabricated production results. July-to-October quarterly benchmarking is an illustrative use case.*
+**Actual SQL Server lab evidence:** [Archive dashboard](https://github.com/stevewittek/Databases/blob/master/docs/images/grafana-overview-period.jpg) | [Period comparison](https://github.com/stevewittek/Databases/blob/master/docs/images/grafana-period-comparison.jpg) | [Wait analysis](https://github.com/stevewittek/Databases/blob/master/docs/images/grafana-wait-analysis.jpg) | [Query detail](https://github.com/stevewittek/Databases/blob/master/docs/images/grafana-query-detail.jpg).
+
+*These are September 2026 WideWorldImporters lab captures, not fabricated production results. A new browser-chrome-free gallery is being prepared. July-to-October quarterly benchmarking is an illustrative use case.*
 
 **Explore:** [Implementation](https://github.com/stevewittek/Databases/tree/master/QueryVault) | [Why it exists](https://github.com/stevewittek/Databases/blob/master/docs/USE_CASES.md) | [All four Grafana views](https://github.com/stevewittek/Databases/blob/master/docs/SCREENSHOT_PLAN.md) | [Validation results and limits](https://github.com/stevewittek/Databases/blob/master/docs/VALIDATION_REPORT.md)
 

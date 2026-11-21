@@ -101,6 +101,7 @@ VALUES
 ('Lifecycle','IF','dbo','ufn_EvaluatePartitionCapacity'),('Lifecycle','V','dbo','vw_QueryVaultStorageRecommendation'),
 ('Canonical','P','dbo','usp_MaterializeCanonicalQueryStoreStats'),
 ('Reporting','V','qv_report','periods'),('Reporting','V','qv_report','query_period_metrics'),
+  ('Reporting','V','qv_report','query_plan_interval_metrics'),
 ('Reporting','V','qv_report','period_metrics'),('Reporting','V','qv_report','wait_period_metrics'),
 ('Reporting','V','qv_report','query_wait_period_metrics'),('Reporting','V','qv_report','query_plans'),
 ('Reporting','P','qv_report','usp_GetShowplanXml');
@@ -255,6 +256,7 @@ BEGIN TRY
   EXEC sys.sp_refreshview N'dbo.vw_QueryVaultStorageRecommendation';
   EXEC sys.sp_refreshview N'qv_report.periods';
   EXEC sys.sp_refreshview N'qv_report.query_period_metrics';
+  EXEC sys.sp_refreshview N'qv_report.query_plan_interval_metrics';
   EXEC sys.sp_refreshview N'qv_report.period_metrics';
   EXEC sys.sp_refreshview N'qv_report.wait_period_metrics';
   EXEC sys.sp_refreshview N'qv_report.query_wait_period_metrics';

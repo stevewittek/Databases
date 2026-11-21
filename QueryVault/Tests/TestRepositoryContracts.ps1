@@ -17,7 +17,7 @@ $namespace = [System.Xml.XmlNamespaceManager]::new($project.NameTable)
 $namespace.AddNamespace("msb", $project.Project.NamespaceURI)
 $buildItems = @($project.SelectNodes("//msb:Build", $namespace))
 
-Assert-Condition ($buildItems.Count -eq 41) "Expected 41 canonical SQL build items; found $($buildItems.Count)."
+Assert-Condition ($buildItems.Count -eq 46) "Expected 46 canonical SQL build items; found $($buildItems.Count)."
 
 foreach ($item in $buildItems) {
     $relativePath = [string]$item.Include
@@ -40,6 +40,7 @@ $procedureNames = @(
     "usp_GetArchiveSummary.sql",
     "usp_InitializeDatabase.sql",
     "usp_ManagePartitions.sql",
+    "usp_SetRunProtection.sql",
     "usp_MaterializeCanonicalQueryStoreStats.sql",
     "usp_PurgeExpiredArchives.sql",
     "qv_report.usp_GetShowplanXml.sql"
@@ -183,7 +184,7 @@ Assert-Condition ($partitionProcedure.Contains("Refusing to truncate a physical 
 Assert-Condition ($partitionProcedure.Contains("IF @StartedTransaction = 1 AND XACT_STATE() <> 0")) "Owned-transaction rollback guard is missing."
 Assert-Condition ($partitionProcedure.Contains("N'EnsureRunPartition'")) "Exact RunID partition allocation is missing."
 Assert-Condition ($partitionProcedure.Contains("N'MergeBoundary'")) "Obsolete RunID boundary merge is missing."
-Assert-Condition ($partitionProcedure.Contains("DoNotDelete = 1")) "Pinned-run partition protection is missing."
+Assert-Condition ($partitionProcedure.Contains("Pinned or preserved runs cannot be switched or truncated.")) "Pinned-run partition protection is missing."
 Assert-Condition ($partitionProcedure.Contains("@RunID + 1")) "Empty future RunID partition allocation is missing."
 Assert-Condition ($partitionProcedure.Contains("SqlServerPartitionLimit")) "SQL Server physical partition ceiling guard is missing."
 Assert-Condition ($partitionProcedure.Contains("migrate legacy overflow data")) "Nonempty legacy overflow split guard is missing."

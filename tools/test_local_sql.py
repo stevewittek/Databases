@@ -69,11 +69,11 @@ IF NOT EXISTS (SELECT 1 FROM dbo.query_store_runtime_stats_contributor)
 """)
         execute("Capability fallback fixture", (ROOT / "QueryVault/Tests/TestSourceCapabilityFallback.sql").read_text())
 
-    for name in ["TestCanonicalQueryStoreAggregation", "TestPartitionSafetyGuards", "TestRunPartitionLifecycle", "TestPurgeExpiredArchives", "TestReportingContract", "TestReportingCanonicalRegression"]:
+    for name in ["TestCanonicalQueryStoreAggregation", "TestPartitionSafetyGuards", "TestRunPartitionLifecycle", "TestPurgeExpiredArchives", "TestReportingContract", "TestReportingCanonicalRegression", "TestPlanIntervalReporting", "TestCollectionRegistry", "TestRunProtection", "TestRetentionPeriodExpiry", "TestPurgeInputValidation"]:
         execute(name, "USE QueryVaultDB;\nGO\n" + expand_test(ROOT / "QueryVault/Tests" / (name + ".sql")))
 
     execute("Ambient transaction guard", """USE QueryVaultDB;
-SET XACT_ABORT OFF;
+SET XACT_ABORT ON;
 BEGIN TRAN;
 BEGIN TRY
  EXEC dbo.usp_ArchiveQueryStore @SourceDatabaseName=N'none', @RunName=N'guard';
@@ -81,7 +81,10 @@ BEGIN TRY
 END TRY
 BEGIN CATCH
  IF ERROR_NUMBER() <> 51006 THROW;
- IF @@TRANCOUNT <> 1 THROW 51998, 'Caller transaction was rolled back.', 1;
+ IF @@TRANCOUNT <> 1 OR XACT_STATE() <> 1
+  THROW 51998, 'Caller transaction was rolled back or made uncommittable.', 1;
+ IF (@@OPTIONS & 16384) = 0
+  THROW 51997, 'Caller XACT_ABORT ON was not restored.', 1;
 END CATCH;
 ROLLBACK;
 """)

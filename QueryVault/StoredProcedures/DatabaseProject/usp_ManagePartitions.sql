@@ -325,15 +325,6 @@ BEGIN
 		IF @RunID IS NULL
 			THROW 51063, 'RunID is required for SwitchOut or Truncate.', 1;
 
-		IF EXISTS
-		(
-			SELECT 1 FROM dbo.RunMetadata
-			WHERE RunID = @RunID AND DoNotDelete = 1
-		)
-			THROW 51064, 'Pinned or preserved runs cannot be switched or truncated.', 1;
-
-		SET @PartitionNumber = $PARTITION.PF_RunID(@RunID);
-
 		IF @@TRANCOUNT = 0
 		BEGIN
 			BEGIN TRANSACTION;
@@ -351,6 +342,20 @@ BEGIN
 
 			IF @LockResult < 0
 				THROW 51054, 'Could not acquire the QueryVault partition lifecycle lock.', 1;
+
+			-- The lifecycle lock can be waited on while another transaction pins a
+			-- run or renumbers partitions. Read current state only after acquiring it.
+			-- Hold the metadata key/range until commit so a concurrent pin cannot
+			-- be acknowledged between this check and the destructive operation.
+			DECLARE @ProtectedRun BIT = NULL;
+			SELECT @ProtectedRun = DoNotDelete
+			FROM dbo.RunMetadata WITH (UPDLOCK, HOLDLOCK)
+			WHERE RunID = @RunID;
+
+			IF @ProtectedRun = 1
+				THROW 51064, 'Pinned or preserved runs cannot be switched or truncated.', 1;
+
+			SET @PartitionNumber = $PARTITION.PF_RunID(@RunID);
 
 			IF @Operation = N'SwitchOut'
 			BEGIN
@@ -487,25 +492,6 @@ BEGIN
 		IF @RunID IS NULL
 			THROW 51068, 'RunID is required for MergeBoundary.', 1;
 
-		IF EXISTS (SELECT 1 FROM dbo.RunMetadata WHERE RunID = @RunID AND DoNotDelete = 1)
-			THROW 51069, 'Pinned or preserved run boundaries cannot be merged.', 1;
-
-		IF EXISTS (SELECT 1 FROM dbo.RunMetadata WHERE RunID = @RunID)
-			THROW 51070, 'Delete eligible RunMetadata only after SWITCH/TRUNCATE and before merging its boundary.', 1;
-
-		IF NOT EXISTS
-		(
-			SELECT 1
-			FROM sys.partition_range_values AS prv
-			INNER JOIN sys.partition_functions AS pf
-				ON pf.function_id = prv.function_id
-			WHERE pf.name = N'PF_RunID'
-				AND CONVERT(INT, prv.value) = @RunID
-		)
-			RETURN 0;
-
-		SET @PartitionNumber = $PARTITION.PF_RunID(@RunID);
-
 		IF @@TRANCOUNT = 0
 		BEGIN
 			BEGIN TRANSACTION;
@@ -523,6 +509,34 @@ BEGIN
 
 			IF @LockResult < 0
 				THROW 51054, 'Could not acquire the QueryVault partition lifecycle lock.', 1;
+
+			DECLARE @MergeProtectedRun BIT = NULL;
+			SELECT @MergeProtectedRun = DoNotDelete
+			FROM dbo.RunMetadata WITH (UPDLOCK, HOLDLOCK)
+			WHERE RunID = @RunID;
+
+			IF @MergeProtectedRun = 1
+				THROW 51069, 'Pinned or preserved run boundaries cannot be merged.', 1;
+
+			IF @MergeProtectedRun IS NOT NULL
+				THROW 51070, 'Delete eligible RunMetadata only after SWITCH/TRUNCATE and before merging its boundary.', 1;
+
+			IF NOT EXISTS
+			(
+				SELECT 1
+				FROM sys.partition_range_values AS prv
+				INNER JOIN sys.partition_functions AS pf
+					ON pf.function_id = prv.function_id
+				WHERE pf.name = N'PF_RunID'
+					AND CONVERT(INT, prv.value) = @RunID
+			)
+			BEGIN
+				IF @StartedTransaction = 1
+					COMMIT TRANSACTION;
+				RETURN 0;
+			END;
+
+			SET @PartitionNumber = $PARTITION.PF_RunID(@RunID);
 
 			IF EXISTS
 			(

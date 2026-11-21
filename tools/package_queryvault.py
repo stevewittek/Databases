@@ -86,6 +86,15 @@ def main():
     for built in (project.parent / "bin/Release").glob("*.dacpac"):
         shutil.copyfile(built, out / built.name)
         dependencies[built.name] = hashlib.sha256(built.read_bytes()).hexdigest()
+    # Public setup code only. Each installation creates its own keys separately.
+    for source_name in ["QueryVault/Security/InitializeCollectorEncryption.ps1",
+                        "QueryVault/Security/SetCollectorCredential.ps1",
+                        "docs/CREDENTIAL_ENCRYPTION.md", "docs/CONNECTION_REGISTRY.md"]:
+        source = ROOT / source_name
+        relative = "setup/" + source.name
+        (out / "setup").mkdir(exist_ok=True)
+        shutil.copyfile(source, out / relative)
+        dependencies[relative] = hashlib.sha256(source.read_bytes()).hexdigest()
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
     receipt = {"target": args.target, "storage": args.storage, "git_revision": revision,

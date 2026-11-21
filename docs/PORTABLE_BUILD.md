@@ -7,6 +7,7 @@ and restored from NuGet. No database connection is made during build.
 ```sh
 python3 -m unittest discover -s tests -v
 pwsh -NoProfile -File QueryVault/Tests/TestRepositoryContracts.ps1
+pwsh -NoProfile -File QueryVault/Tests/TestCollectorEncryptionScripts.ps1
 python3 tools/package_queryvault.py --target 2016 --storage rowstore
 python3 tools/package_queryvault.py --target 2022 --storage columnstore
 python3 tools/package_queryvault.py --target azure --storage rowstore
@@ -15,8 +16,11 @@ python3 tools/package_queryvault.py --target azure --storage rowstore
 Targets are `2016`, `2017`, `2019`, `2022`, `2025`, `azure`. Storage defaults to
 rowstore. SQL 2016 columnstore is rejected because of MAX-valued text/plan columns.
 Packages (including the required adjacent `master.dacpac`) and source/content hash manifests appear under
-`artifacts/<target>-<storage>/`. Each ZIP contains the archive DACPAC, required system reference DACPAC and manifest.
-Generated model sources are included for review; do not edit them. The canonical SSDT manifest remains the source of build inputs.
+`artifacts/<target>-<storage>/`. Each ZIP contains the archive DACPAC, required system reference DACPAC, manifest,
+and public credential bootstrap scripts/guidance under `setup/`. Keys are generated
+per installation; they are never packaged. Password sources remain disabled until
+key setup and collector acceptance are complete.
+Generated model sources remain beside the ZIP for review; do not edit them. The canonical SSDT manifest remains the source of build inputs.
 Build repeatability means pinned tooling and the same source model; binary hashes
 may vary with build metadata and are not claimed to be byte-identical across hosts.
 
@@ -41,7 +45,11 @@ python3 tools/test_local_sql.py --container queryvault-compat-test \
 DACPAC installation. `--capture-fixture` leaves two lab archive periods for the
 reporting assertions and exercises a deliberately reduced source capability
 catalog, restoring the procedure definition afterward. This is not a substitute
-for running an actual older engine. The harness expands existing SQLCMD includes
+for running an actual older engine. Run `tools/test_pin_concurrency.py --container queryvault-compat-test` separately
+after the main suite to exercise two-session pin/maintenance races and purge
+transaction ownership. Do not run suites against the same database concurrently.
+
+The harness expands existing SQLCMD includes
 and omits historical table-bootstrap includes because the full fresh schema is
 already present. It otherwise runs the existing SQL assertions unchanged.
 

@@ -21,6 +21,7 @@ CREATE TABLE dbo.RunMetadata
 
 	-- Protection and retention
 	DoNotDelete BIT NOT NULL DEFAULT 0,
+	ProtectionNote NVARCHAR(1000) NULL, -- Reason for the latest explicit pin/unpin action
 	RetentionDate DATETIME2(7) NULL, -- When this run can be deleted (if DoNotDelete = 0)
 
 	-- Statistics

@@ -232,3 +232,11 @@ Issues and pull requests are welcome. If proposing a change, please describe the
 ## License
 
 No open-source license has been selected yet. The source is publicly visible for review and portfolio purposes; reuse rights are not granted unless a license is added later.
+
+## Current implementation work
+
+[QueryVault GitHub Project](https://github.com/users/stevewittek/projects/10) tracks the
+standalone multi-source release. See [ROADMAP.md](ROADMAP.md),
+[connection registry](docs/CONNECTION_REGISTRY.md),
+[credential encryption](docs/CREDENTIAL_ENCRYPTION.md) and
+[Codex work packets](docs/CODEX_WORK_PACKETS.md).

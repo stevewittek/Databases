@@ -94,6 +94,18 @@ GO
 :r "$(ProjectDir)Tables\Core\DatabaseConfig.sql"
 GO
 
+:r "$(ProjectDir)Tables\Core\CollectionCredential.sql"
+GO
+
+:r "$(ProjectDir)Tables\Core\CollectionEndpoint.sql"
+GO
+
+:r "$(ProjectDir)Tables\Core\CollectionRetentionPolicy.sql"
+GO
+
+:r "$(ProjectDir)Tables\Core\CollectionSource.sql"
+GO
+
 :r "$(ProjectDir)Scripts\MigrateRunPartitioning.sql"
 GO
 
@@ -191,6 +203,10 @@ GO
 GO
 
 :r "$(ProjectDir)StoredProcedures\usp_ManagePartitions.sql"
+GO
+:r "$(ProjectDir)Scripts\MigrateProtectionNote.sql"
+GO
+:r "$(ProjectDir)StoredProcedures\usp_SetRunProtection.sql"
 GO
 
 :r "$(ProjectDir)StoredProcedures\usp_InitializeDatabase.sql"

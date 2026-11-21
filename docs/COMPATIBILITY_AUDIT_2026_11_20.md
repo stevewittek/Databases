@@ -179,8 +179,9 @@ tenant isolation. It should not expose arbitrary SQL execution or database secre
 
 See `LOCAL_VALIDATION_2026_11_20.md` for executed checks and limitations.
 Nothing in this work was pushed, externally deployed or connected to production.
-The existing `master` production workflow deploys QueryVault changes to Voyager2;
-this branch must not be pushed/merged into that release path without approval.
+The original audit saw push-triggered production deployment. A later verified
+master change (c656d388) made that workflow manual-only. Host recovery and production
+deployment acceptance remain separate gates; this audit does not authorize deployment.
 
 1. Review the new models and nullable-metric upgrade strategy; test migration on
    a restored archive with existing partitions and protected runs.

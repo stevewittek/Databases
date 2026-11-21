@@ -1,5 +1,8 @@
 # Local validation — November 20, 2026
 
+Historical foundation evidence only. The later combined candidate is documented
+in `REGISTRY_VALIDATION_2026_11_20.md`; do not apply these 40-item results to it.
+
 Repository baseline: `0687cfe`, local branch
 `codex/queryvault-compatibility-foundation`. Validation covers the local candidate,
 not the deployed Voyager2 archive. Times in raw SQL logs are UTC and can show

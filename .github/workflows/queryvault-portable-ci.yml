@@ -27,6 +27,8 @@ jobs:
         with:
           dotnet-version: "10.0.x"
       - run: python3 -m unittest discover -s tests -v
+      - run: pwsh -NoProfile -File QueryVault/Tests/TestRepositoryContracts.ps1
+      - run: pwsh -NoProfile -File QueryVault/Tests/TestCollectorEncryptionScripts.ps1
       - run: python3 tools/package_queryvault.py --target '${{ matrix.target }}' --storage '${{ matrix.storage }}'
       - uses: actions/upload-artifact@v4
         with:

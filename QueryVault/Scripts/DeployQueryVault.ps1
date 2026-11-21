@@ -53,6 +53,10 @@ $deploymentSteps = @(
 	@{ Name = "Partition Scheme"; Path = "Partitions/PartitionScheme.sql"; Kind = "Always" },
 	@{ Name = "RunMetadata Table"; Path = "Tables/Core/RunMetadata.sql"; Kind = "Table"; Object = "RunMetadata" },
 	@{ Name = "DatabaseConfig Table"; Path = "Tables/Core/DatabaseConfig.sql"; Kind = "Table"; Object = "DatabaseConfig" },
+	@{ Name = "CollectionCredential Table"; Path = "Tables/Core/CollectionCredential.sql"; Kind = "Table"; Object = "CollectionCredential" },
+	@{ Name = "CollectionEndpoint Table"; Path = "Tables/Core/CollectionEndpoint.sql"; Kind = "Table"; Object = "CollectionEndpoint" },
+	@{ Name = "CollectionRetentionPolicy Table"; Path = "Tables/Core/CollectionRetentionPolicy.sql"; Kind = "Table"; Object = "CollectionRetentionPolicy" },
+	@{ Name = "CollectionSource Table"; Path = "Tables/Core/CollectionSource.sql"; Kind = "Table"; Object = "CollectionSource" },
 	@{ Name = "Run partitioning configuration migration"; Path = "Scripts/MigrateRunPartitioning.sql"; Kind = "Always" },
 	@{ Name = "query_store_query Table"; Path = "Tables/QueryStore/query_store_query.sql"; Kind = "Table"; Object = "query_store_query" },
 	@{ Name = "query_store_query_text Table"; Path = "Tables/QueryStore/query_store_query_text.sql"; Kind = "Table"; Object = "query_store_query_text" },
@@ -77,6 +81,8 @@ $deploymentSteps = @(
 	@{ Name = "Legacy partition switch constraint migration"; Path = "Scripts/FixPartitionMaintenanceSwitchConstraints.sql"; Kind = "Always" },
 	@{ Name = "ufn_EvaluatePartitionCapacity Function"; Path = "Functions/ufn_EvaluatePartitionCapacity.sql"; Kind = "Function" },
 	@{ Name = "usp_ManagePartitions Procedure"; Path = "StoredProcedures/usp_ManagePartitions.sql"; Kind = "Procedure" },
+	@{ Name = "Protection note migration"; Path = "Scripts/MigrateProtectionNote.sql"; Kind = "Always" },
+	@{ Name = "usp_SetRunProtection Procedure"; Path = "StoredProcedures/usp_SetRunProtection.sql"; Kind = "Procedure" },
 	@{ Name = "usp_InitializeDatabase Procedure"; Path = "StoredProcedures/usp_InitializeDatabase.sql"; Kind = "Procedure" },
 	@{ Name = "usp_GetArchiveSummary Procedure"; Path = "StoredProcedures/usp_GetArchiveSummary.sql"; Kind = "Procedure" },
 	@{ Name = "usp_MaterializeCanonicalQueryStoreStats Procedure"; Path = "StoredProcedures/usp_MaterializeCanonicalQueryStoreStats.sql"; Kind = "Procedure" },
@@ -88,6 +94,7 @@ $deploymentSteps = @(
 	@{ Name = "qv_report.wait_period_metrics View"; Path = "Views/qv_report.wait_period_metrics.sql"; Kind = "View" },
 	@{ Name = "qv_report.query_wait_period_metrics View"; Path = "Views/qv_report.query_wait_period_metrics.sql"; Kind = "View" },
 	@{ Name = "qv_report.query_plans View"; Path = "Views/qv_report.query_plans.sql"; Kind = "View" },
+	@{ Name = "qv_report.query_plan_interval_metrics View"; Path = "Views/qv_report.query_plan_interval_metrics.sql"; Kind = "View" },
 	@{ Name = "qv_report.usp_GetShowplanXml Procedure"; Path = "StoredProcedures/qv_report.usp_GetShowplanXml.sql"; Kind = "Procedure" },
 	@{ Name = "vw_QueryVaultStorageRecommendation View"; Path = "Views/dbo.vw_QueryVaultStorageRecommendation.sql"; Kind = "View" }
 )

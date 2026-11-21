@@ -21,7 +21,12 @@ BEGIN
 	SET NOCOUNT ON;
 	-- This procedure owns its archive transaction. Never roll back a caller's work.
 	IF @@TRANCOUNT <> 0
+	BEGIN
+		-- Reject without dooming an XACT_ABORT ON caller. The caller's option
+		-- is restored automatically when control returns from this procedure.
+		SET XACT_ABORT OFF;
 		THROW 51006, 'Archive capture must run without an ambient transaction.', 1;
+	END;
 	SET XACT_ABORT ON;
 
 	DECLARE @RunID INT;
@@ -34,6 +39,7 @@ BEGIN
 	DECLARE @QueryStoreFlushSeconds INT = 900;
 	DECLARE @ActualBatchSize INT;
 	DECLARE @ActualRetentionDays INT;
+	DECLARE @ActualRetentionDate DATETIME2(7);
 	DECLARE @RowCount BIGINT;
 	DECLARE @CompressionDelay INT;
 	DECLARE @RuntimeContributorRows BIGINT;
@@ -103,6 +109,16 @@ BEGIN
 
 		IF @ActualEndDateTime < @ActualStartDateTime
 			THROW 51003, 'The requested archive range does not contain a safely flushed Query Store interval.', 1;
+
+		-- Retention measures the age of captured data, not how recently an old
+		-- period was imported. Pins independently override expiry; retain the
+		-- date so an explicit unpin restores the original policy. The upper bound is SQL's
+		-- representable date horizon, not an arbitrary product retention limit.
+		IF @ActualRetentionDays IS NULL OR @ActualRetentionDays < 1
+			OR @ActualRetentionDays > DATEDIFF(DAY, @ActualEndDateTime, CONVERT(DATETIME2(7), '9999-12-31'))
+			THROW 51009, 'RetentionDays must be positive and fit after the captured period end.', 1;
+
+		SET @ActualRetentionDate = DATEADD(DAY, @ActualRetentionDays, @ActualEndDateTime);
 
 		-- Inspect the source catalog, not ProductMajorVersion: Azure versions and
 		-- backported features do not follow boxed-server version numbering.
@@ -191,7 +207,7 @@ BEGIN
 			@ActualStartDateTime,
 			@ActualEndDateTime,
 			@DoNotDelete,
-			CASE WHEN @DoNotDelete = 0 THEN DATEADD(DAY, @ActualRetentionDays, SYSUTCDATETIME()) ELSE NULL END,
+			@ActualRetentionDate,
 			@CapabilityNotes,
 			'In Progress'
 		);

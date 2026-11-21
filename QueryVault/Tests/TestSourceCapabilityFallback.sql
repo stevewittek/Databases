@@ -8,7 +8,10 @@ GO
 SET NOCOUNT ON;
 SET XACT_ABORT OFF;
 DECLARE @Original nvarchar(max) = OBJECT_DEFINITION(OBJECT_ID(N'dbo.usp_ArchiveQueryStore'));
-DECLARE @AlterOriginal nvarchar(max) = REPLACE(@Original, N'CREATE PROCEDURE', N'ALTER PROCEDURE');
+-- SQL Server normalizes CREATE OR ALTER to CREATE   PROCEDURE in metadata.
+DECLARE @AlterOriginal nvarchar(max) = REPLACE(@Original, N'CREATE OR ALTER', N'CREATE');
+IF LEFT(@AlterOriginal,6) <> N'CREATE' THROW 51979, 'Unexpected procedure definition prefix.', 1;
+SET @AlterOriginal = STUFF(@AlterOriginal,1,6,N'ALTER');
 DECLARE @Modified nvarchar(max) = REPLACE(@AlterOriginal,
  N'INSERT INTO @SourceColumns EXEC sys.sp_executesql @SQL;',
  N'INSERT INTO @SourceColumns EXEC sys.sp_executesql @SQL;

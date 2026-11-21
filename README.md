@@ -240,3 +240,10 @@ standalone multi-source release. See [ROADMAP.md](ROADMAP.md),
 [connection registry](docs/CONNECTION_REGISTRY.md),
 [credential encryption](docs/CREDENTIAL_ENCRYPTION.md) and
 [Codex work packets](docs/CODEX_WORK_PACKETS.md).
+
+### Collection direction — November 21, 2026
+
+The first collector will use T-SQL with linked servers/OPENQUERY (#57). The earlier
+external collector/Always Encrypted setup is deferred; credential storage (#49)
+and Azure SQL archive scope are under review. See
+[the current design](docs/TSQL_COLLECTION_DIRECTION.md) before using older setup instructions.

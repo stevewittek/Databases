@@ -1,5 +1,12 @@
 # Portable build and local collector
 
+> **Direction update, November 21:** The first collector will use T-SQL and
+> linked servers/OPENQUERY (#57). The external-client Always Encrypted setup below
+> is deferred experimental work, not the approved first-release credential design.
+> Credential storage is awaiting owner choice in #49. See
+> [T-SQL collection direction](TSQL_COLLECTION_DIRECTION.md).
+
+
 These commands are run from the repository root. Building requires Python 3.9+
 and a current .NET SDK; Microsoft.Build.Sql and system DACPAC packages are pinned
 and restored from NuGet. No database connection is made during build.

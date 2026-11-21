@@ -12,9 +12,8 @@ it does not complete the downstream host or implementation tickets.
 
 Read issue #27's current owner-decision section before using older release labels
 or sprint dates. The first-release goal is standalone multi-server collection,
-both SQL Server and Azure SQL archive destinations, and Grafana. A single central
-collector will initially run on a host that can reach the configured sources and
-archive. Live reachability has not been established merely by this plan.
+Grafana, and a central T-SQL collector using linked servers/OPENQUERY. Azure SQL
+archive scope is being revisited; SQL Server is the proposed initial host. Live reachability has not been established merely by this plan.
 
 The coordinator owns integration and shared schema files. Do not work in another
 agent's dirty checkout. Use an isolated branch/worktree from the coordinator's
@@ -104,59 +103,45 @@ container/service restarts, filesystem repair or any deployment.
    move or repair anything and do not shut down a source or runner.
 ```
 
-## Packet 3 — Collector contract and implementation gate
+## Packet 3 — T-SQL collection contract and implementation gate
 
-Use after the coordinator publishes the candidate branch and identifies the
-concrete child ticket under #10/#39. Do not dispatch this to multiple machines
-editing the same collector files.
+The owner selected T-SQL with linked servers/OPENQUERY. The earlier standalone
+program packet is superseded. Do not dispatch overlapping work to multiple hosts.
 
 ```text
-Work on the assigned QueryVault collector ticket under #10/#39, from the exact
-candidate commit supplied by the coordinator. Read #7, #8, #9, #11, #27, #37 and
-#47 plus docs/COMPATIBILITY_AUDIT_2026_11_20.md and docs/PORTABLE_BUILD.md. Check
-the actual latest decisions first; historical titles and sprint dates may lag.
-Read #48 for the registry contract, #49 for encrypted-credential provisioning,
-and #54 for collector-local approval of credential/endpoint bindings.
+Work on QueryVault #57 under #7/#10/#39 using the coordinator's exact candidate
+commit. Read docs/TSQL_COLLECTION_DIRECTION.md, #27, #48, #49 and #54. Inspect git
+status and use an isolated checkout; preserve other work.
 
-Before implementation, inspect these decision gates:
-- Collector runtime and its scheduled/service installation contract approved?
-- Key location is approved: unique collector-held key, encrypted credentials in
-  QueryVault, separate protected backup. Windows bootstrap exists; native key
-  isolation, enrollment, restore and rotation acceptance in #49 is still open.
-- Source/epoch identity, schema version and destination ingestion contract fixed?
-- Storage/period ownership and retry/checkpoint rules approved for this slice?
-If a required answer is missing, mark the exact dependent item blocked and report
-options/recommendation. Do not silently choose it or implement a plaintext fallback.
+The first path uses T-SQL stored procedures, same-instance databases and explicitly
+approved linked servers. Do not build/install a .NET/Python collector service.
+Credential storage (#49) is unanswered: do not create links/login mappings, add a
+SQL password vault, enable credential reads, or reuse the deferred Always Encrypted
+bootstrap as the solution. Azure SQL archive scope also remains under review.
 
-Independent work allowed while gates remain open: read source code, characterize
-the existing Python exporter's bounded-batch behavior, draft failure fixtures and
-review the proposed protocol. Do not rewrite the exporter into a chosen runtime
-or connect to a real source until the relevant choices and target authorization
-are recorded.
+Independent work: document registry-to-link mapping, execution identity, permitted
+query templates, complete-window/source identity rules and synthetic test cases.
+Inventory only already authorized local tools. Do not install providers, enable
+RPC/DTC, change login permissions, schedule jobs or contact real sources.
 
-After the applicable gates are satisfied, implement only the assigned slice:
-1. Resolve allowed server, port and database from the central registry. Treat
-   source and destination as independent verified TLS connections. No silent
-   TrustServerCertificate fallback, source writes or linked-server dependency.
-2. Request only available source catalogs/columns using capability discovery;
-   preserve unavailable values as unavailable. Use parameterized values and safe
-   identifier construction. Limit rows, bytes, runtime and concurrency.
-3. Preserve source identity and epoch, UTC interval boundaries and contributor
-   multiplicity. Separate mutable metadata observations from immutable interval
-   receipts so harmless metadata changes cannot break replay semantics.
-4. Stage, validate and transactionally commit facts + receipt + checkpoint in the
-   destination. Exact retry returns the receipt; conflicting content is rejected
-   for reconciliation. A missing interval must not be hidden by advancing past it.
-5. Test process interruption, partial upload, duplicate and out-of-order batches,
-   source cleanup/reset, schema mismatch, concurrent collectors, secret rotation,
-   unavailable source and archive outage. One unavailable source must not stall
-   every other source. No real customer data in fixtures or public logs.
-6. Use a disposable authorized test environment with synthetic data. No tests on
-   Motion Relay or Voyager2 production, no cloud provisioning or paid API calls.
-7. Open a reviewable PR and report commit-specific checks. Preserve all existing
-   reporting/retention contracts or document reviewed migrations. Update only
-   verified ticket acceptance items; do not mark end-to-end collection complete
-   because serialization tests, a model build or a PR merge passed.
+After dependencies are explicitly resolved and a disposable target is authorized:
+1. Validate the registered link, real endpoint/catalog, provider/TLS and effective
+   execution login. Grant only bounded read access; reject unapproved mappings.
+2. Push interval filters to sources. Keep row/byte/time limits, preserve complete
+   Unicode text/plan data, and retain duplicate contributors with their lineage.
+3. Respect OPENQUERY's 8-KB command limit and lack of argument variables. Validate
+   identifiers, quote them correctly and generate typed predicate literals. Never
+   accept caller-provided SQL or place passwords in query text/logs.
+4. Stage remote reads before a local commit. Do not assume a coherent cross-server
+   snapshot. Detect changed epochs, coverage gaps and source cleanup explicitly.
+5. Commit validated facts, receipt and checkpoint atomically. Test interruption,
+   retries, out-of-order data, source failure, conflicting replay and archive outage.
+6. Validate against separate disposable SQL instances. Loopback/static builds do
+   not prove production provider behavior. Keep Azure source testing separately
+   scoped; do not use Motion Relay production for experiments.
+7. Report measured source overhead and network volume, exact versions, remaining
+   limits and a reviewable PR. Update only demonstrated acceptance. Keep #57 open
+   until its actual requirements are met; do not deploy or activate automatically.
 ```
 
 ## Packet 4 — Retention and benchmark acceptance design

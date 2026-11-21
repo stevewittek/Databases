@@ -8,8 +8,8 @@ QueryVault saves the query performance history that a database's Query Store wou
 
 | Part | Position today |
 | --- | --- |
-| Capture and reporting | Same-instance SQL capture and the four existing Grafana dashboards are implemented. Historical lab validation exists. |
-| Latest improvements | Registry tables, protection notes, retention fixes and readiness tools are in draft [PR 56](https://github.com/stevewittek/Databases/pull/56). They are not deployed to Voyager by this work. |
+| Capture and reporting | A new [Voyager 1 sqlsim demonstration](SQLSIM_END_TO_END_2026_11_21.md) passed: 100 workload executions matched QueryVault's saved reporting metrics exactly. The four existing Grafana dashboards have separate historical lab validation. |
+| Latest improvements | Registry tables, protection notes, retention fixes and readiness tools are in draft [PR 56](https://github.com/stevewittek/Databases/pull/56). The candidate is deployed only to the new isolated Voyager 1 demo archive; existing archives remain unchanged. |
 | Remote sources | T-SQL with linked servers is the selected direction. Registry integration, remote ingestion and restart-safe checkpoints are still being built. |
 | MotionRelay in Azure | A real encrypted connection and Query Store metadata checks succeeded. No MotionRelay history has been imported into QueryVault. Unattended access is still pending. |
 | Existing Voyager installations | Voyager 1's archive job has a diagnosed legacy partition problem; repair is pending. Voyager 2's current database and backup state could not be verified. |

@@ -2,6 +2,8 @@
 
 Reviewed November 21, 2026 for QueryVault test work in [ticket 12](https://github.com/stevewittek/Databases/issues/12).
 
+**Subsequent execution:** The separately authorized [isolated end-to-end demonstration](SQLSIM_END_TO_END_2026_11_21.md) now passes, with 100 workload executions reconciled to QueryVault. The initial installation/connectivity evaluation below remains a distinct evidence step.
+
 ## Tool identification and fit
 
 The tool is **sqlsimtools**. Bob Ward introduced it on October 14, 2026 as a newer approach to the workload testing he previously did with ostress. The suite contains native `sqlsim`, Python `sqlpysim`, and the visual `sqlsim Studio`. [Bob Ward's announcement](https://techcommunity.microsoft.com/blog/sqlserver/introducing-sqlsimtools/4563955).

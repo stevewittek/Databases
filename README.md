@@ -4,6 +4,8 @@ A SQL Server database project for preserving, organizing, and analyzing historic
 
 QueryVault copies Query Store information from one or more source databases into a centralized archive. It is designed to support longer-term performance analysis when the source database's built-in Query Store retention window is not enough. The project combines T-SQL, SQL Server Data Tools project structure, PowerShell deployment helpers, table partitioning, clustered columnstore indexes, and SQL Server Agent automation.
 
+**Engineering roadmap and sprints:** [QueryVault release plan](ROADMAP.md) | [Master GitHub tracker #27](https://github.com/stevewittek/Databases/issues/27) | [Sprint 0](https://github.com/stevewittek/Databases/issues/40) | [Sprint 1](https://github.com/stevewittek/Databases/issues/41) | [Sprint 2](https://github.com/stevewittek/Databases/issues/42) | [Current development PR](https://github.com/stevewittek/Databases/pull/46).
+
 ## A 90-second project tour
 
 **The problem:** SQL Server Query Store history can roll off, be cleared during database refreshes or load-test resets, or disappear as storage limits are reached. This can erase the baseline before a quarter-long optimization effort has finished.

@@ -8,6 +8,8 @@ are still pending; the historical release evidence below does not validate this 
 
 A SQL Server database project for preserving, organizing, and analyzing historical Query Store data.
 
+**Review the proposed setup and daily use:** [Simple walkthrough and current status](docs/START_HERE.md) | [Functional and load test plan](docs/TEST_AND_LOAD_REVIEW.md). These distinguish today's local foundation from the unfinished multi-server workflow.
+
 QueryVault copies Query Store information from one or more source databases into a centralized archive. It is designed to support longer-term performance analysis when the source database's built-in Query Store retention window is not enough. The project combines T-SQL, SQL Server Data Tools project structure, PowerShell deployment helpers, table partitioning, clustered columnstore indexes, and SQL Server Agent automation.
 
 **Engineering roadmap and sprints:** [QueryVault release plan](ROADMAP.md) | [Master GitHub tracker #27](https://github.com/stevewittek/Databases/issues/27) | [Sprint 0](https://github.com/stevewittek/Databases/issues/40) | [Sprint 1](https://github.com/stevewittek/Databases/issues/41) | [Sprint 2](https://github.com/stevewittek/Databases/issues/42) | [Current development PR](https://github.com/stevewittek/Databases/pull/46).

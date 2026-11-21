@@ -24,7 +24,8 @@ Targets are `2016`, `2017`, `2019`, `2022`, `2025`, `azure`. Storage defaults to
 rowstore. SQL 2016 columnstore is rejected because of MAX-valued text/plan columns.
 Packages (including the required adjacent `master.dacpac`) and source/content hash manifests appear under
 `artifacts/<target>-<storage>/`. Each ZIP contains the archive DACPAC, required system reference DACPAC, manifest,
-and public credential bootstrap scripts/guidance under `setup/`. Keys are generated
+public deferred credential bootstrap scripts/guidance under `setup/`, and the
+read-only source/linked-server inspection tools under `preflight/`. Keys are generated
 per installation; they are never packaged. Password sources remain disabled until
 key setup and collector acceptance are complete.
 Generated model sources remain beside the ZIP for review; do not edit them. The canonical SSDT manifest remains the source of build inputs.

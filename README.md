@@ -247,3 +247,9 @@ The first collector will use T-SQL with linked servers/OPENQUERY (#57). The earl
 external collector/Always Encrypted setup is deferred; credential storage (#49)
 and Azure SQL archive scope are under review. See
 [the current design](docs/TSQL_COLLECTION_DIRECTION.md) before using older setup instructions.
+
+Read-only connection preparation is available through the
+[source readiness check](docs/SOURCE_READINESS.md) and
+[local linked-server inspector](docs/LINKED_SERVER_PREFLIGHT.md).
+The [Azure readiness report](docs/AZURE_SOURCE_READINESS_2026_11_21.md) distinguishes
+successful manual metadata access from the remaining unattended collection work.

@@ -87,14 +87,23 @@ def main():
         shutil.copyfile(built, out / built.name)
         dependencies[built.name] = hashlib.sha256(built.read_bytes()).hexdigest()
     # Public setup code only. Each installation creates its own keys separately.
-    for source_name in ["QueryVault/Security/InitializeCollectorEncryption.ps1",
-                        "QueryVault/Security/SetCollectorCredential.ps1",
-                        "docs/CREDENTIAL_ENCRYPTION.md", "docs/CONNECTION_REGISTRY.md"]:
-        source = ROOT / source_name
-        relative = "setup/" + source.name
-        (out / "setup").mkdir(exist_ok=True)
-        shutil.copyfile(source, out / relative)
-        dependencies[relative] = hashlib.sha256(source.read_bytes()).hexdigest()
+    public_files = {
+        "setup": ["QueryVault/Security/InitializeCollectorEncryption.ps1",
+                  "QueryVault/Security/SetCollectorCredential.ps1",
+                  "docs/CREDENTIAL_ENCRYPTION.md", "docs/CONNECTION_REGISTRY.md",
+                  "docs/TSQL_COLLECTION_DIRECTION.md"],
+        "preflight": ["QueryVault/Preflight/InspectQueryStoreReadiness.sql",
+                      "QueryVault/Preflight/InvokeQueryStoreReadiness.ps1",
+                      "QueryVault/Preflight/InspectLinkedServer.sql",
+                      "docs/SOURCE_READINESS.md", "docs/LINKED_SERVER_PREFLIGHT.md"],
+    }
+    for folder, source_names in public_files.items():
+        for source_name in source_names:
+            source = ROOT / source_name
+            relative = folder + "/" + source.name
+            (out / folder).mkdir(exist_ok=True)
+            shutil.copyfile(source, out / relative)
+            dependencies[relative] = hashlib.sha256(source.read_bytes()).hexdigest()
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
     receipt = {"target": args.target, "storage": args.storage, "git_revision": revision,

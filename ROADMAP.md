@@ -73,3 +73,29 @@ Suggested personal GitHub Project: **QueryVault | Netherwood DBA Toolkit**.
 A finished implementation ticket requires an appropriate code review; version-specific and automated test evidence; no silent query aggregation changes; V1 dashboard and archive compatibility; least-privilege security; backup/rollback and migration guidance when applicable; documented scope and limitations. No AI-generated advice may be presented as verified causation, and no source index/plan/hint write is permitted in R1.
 
 Never deploy test changes to Voyager2 or manipulate Motion Relay production data without separate explicit approval.
+
+
+## Sprint execution calendar
+
+These are issue-based sprint records and GitHub labels. They are **not** a GitHub Projects v2 board. Each record links the canonical implementation tickets and their acceptance criteria.
+
+| Sprint | Dates (proposed) | Focus | GitHub issue |
+| --- | --- | --- | --- |
+| Sprint 0 | Nov 23 to Dec 4, 2026 | Deployment safety, Voyager1 host, recoverable archive | [#40](https://github.com/stevewittek/Databases/issues/40) |
+| Sprint 1 | Dec 7 to Dec 18, 2026 | Plan-level metrics, deterministic regression detection, tests | [#41](https://github.com/stevewittek/Databases/issues/41) |
+| Sprint 2 | Dec 21, 2026 to Jan 8, 2027 | Fifth Grafana dashboard, scheduled analysis, demo release | [#42](https://github.com/stevewittek/Databases/issues/42) |
+| Sprint 3 | Jan 11 to Jan 22, 2027 | Scalable storage architecture, query identity and adapter design | [#43](https://github.com/stevewittek/Databases/issues/43) |
+| Sprint 4 | Jan 25 to Feb 5, 2027 | Azure SQL read-only POC and collector | [#44](https://github.com/stevewittek/Databases/issues/44) |
+| Sprint 5 | Feb 8 to Feb 19, 2027 | Cross-source integration/QA and R2 preview | [#45](https://github.com/stevewittek/Databases/issues/45) |
+
+### Filter the backlog by label
+- [Sprint 0](https://github.com/stevewittek/Databases/issues?q=is%3Aissue+is%3Aopen+label%3Asprint%3A0)
+- [Sprint 1](https://github.com/stevewittek/Databases/issues?q=is%3Aissue+is%3Aopen+label%3Asprint%3A1)
+- [Sprint 2](https://github.com/stevewittek/Databases/issues?q=is%3Aissue+is%3Aopen+label%3Asprint%3A2)
+- [Sprint 3](https://github.com/stevewittek/Databases/issues?q=is%3Aissue+is%3Aopen+label%3Asprint%3A3)
+- [Sprint 4](https://github.com/stevewittek/Databases/issues?q=is%3Aissue+is%3Aopen+label%3Asprint%3A4)
+- [Blockers](https://github.com/stevewittek/Databases/issues?q=is%3Aissue+is%3Aopen+label%3Atype%3Ablocker)
+- [Ready to work](https://github.com/stevewittek/Databases/issues?q=is%3Aissue+is%3Aopen+label%3Astatus%3Aready)
+
+### Active safety status
+On Nov 20, 2026, commit [c656d388](https://github.com/stevewittek/Databases/commit/c656d388a9f6fc9d8071486b9ef0ec07429e6861) removed the automatic push trigger from `.github/workflows/queryvault-prod.yml`. Manual deployment remains possible. This does not verify backup integrity or authorize a manual Voyager2 deployment. See #28.

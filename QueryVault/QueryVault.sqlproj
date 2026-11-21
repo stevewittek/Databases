@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -111,6 +111,7 @@
     <None Include="Views\dbo.vw_QueryVaultStorageRecommendation.sql" />
     <None Include="Views\qv_report.periods.sql" />
     <None Include="Views\qv_report.query_period_metrics.sql" />
+    <None Include="Views\qv_report.query_plan_interval_metrics.sql" />
     <None Include="Views\qv_report.period_metrics.sql" />
     <None Include="Views\qv_report.wait_period_metrics.sql" />
     <None Include="Views\qv_report.query_wait_period_metrics.sql" />
@@ -127,6 +128,7 @@
     <None Include="Tests\TestQueryStoreAggregationGrain.sql" />
     <None Include="Tests\TestCanonicalQueryStoreAggregation.sql" />
     <None Include="Tests\TestReportingContract.sql" />
+    <None Include="Tests\TestPlanIntervalReporting.sql" />
     <None Include="Tests\TestReportingCanonicalRegression.sql" />
     <None Include="Tests\TestPartitionSafetyGuards.sql" />
     <None Include="Tests\TestProcedureCompilation.sql" />
@@ -135,6 +137,10 @@
   </ItemGroup>
   <ItemGroup>
     <Build Include="Tables\Core\DatabaseConfig.sql" />
+    <Build Include="Tables\Core\CollectionCredential.sql" />
+    <Build Include="Tables\Core\CollectionEndpoint.sql" />
+    <Build Include="Tables\Core\CollectionRetentionPolicy.sql" />
+    <Build Include="Tables\Core\CollectionSource.sql" />
     <Build Include="Tables\Core\RunMetadata.sql" />
     <Build Include="Tables\PartitionMaintenance\query_store_plan_PartitionMaintenance.sql" />
     <Build Include="Tables\PartitionMaintenance\query_store_query_PartitionMaintenance.sql" />
@@ -163,11 +169,13 @@
     <Build Include="StoredProcedures\DatabaseProject\usp_GetArchiveSummary.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_InitializeDatabase.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_ManagePartitions.sql" />
+    <Build Include="StoredProcedures\DatabaseProject\usp_SetRunProtection.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_MaterializeCanonicalQueryStoreStats.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_PurgeExpiredArchives.sql" />
     <Build Include="Schemas\qv_report.sql" />
     <Build Include="Views\DatabaseProject\qv_report.periods.sql" />
     <Build Include="Views\DatabaseProject\qv_report.query_period_metrics.sql" />
+    <Build Include="Views\DatabaseProject\qv_report.query_plan_interval_metrics.sql" />
     <Build Include="Views\DatabaseProject\qv_report.period_metrics.sql" />
     <Build Include="Views\DatabaseProject\qv_report.wait_period_metrics.sql" />
     <Build Include="Views\DatabaseProject\qv_report.query_wait_period_metrics.sql" />

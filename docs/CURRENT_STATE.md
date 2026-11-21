@@ -1,5 +1,9 @@
 # QueryVault Current State
 
+For the November 20, 2026 local compatibility candidate, see
+[the new audit](COMPATIBILITY_AUDIT_2026_11_20.md). The remainder of this document
+is the historical September deployment snapshot and has not been reverified on Voyager2.
+
 Status date: 2026-09-03. Production branch: `master`. Commit
 `dc0f471038776832d303168d660082dcab143fff` is deployed on Voyager2 through the
 guarded production workflow. It contains the validated database candidate, the

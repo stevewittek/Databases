@@ -110,6 +110,7 @@
     <None Include="Views\dbo.vw_QueryVaultStorageRecommendation.sql" />
     <None Include="Views\qv_report.periods.sql" />
     <None Include="Views\qv_report.query_period_metrics.sql" />
+    <None Include="Views\qv_report.query_plan_interval_metrics.sql" />
     <None Include="Views\qv_report.period_metrics.sql" />
     <None Include="Views\qv_report.wait_period_metrics.sql" />
     <None Include="Views\qv_report.query_wait_period_metrics.sql" />
@@ -126,6 +127,7 @@
 	<None Include="Tests\TestQueryStoreAggregationGrain.sql" />
 	<None Include="Tests\TestCanonicalQueryStoreAggregation.sql" />
 	<None Include="Tests\TestReportingContract.sql" />
+	<None Include="Tests\TestPlanIntervalReporting.sql" />
 	<None Include="Tests\TestReportingCanonicalRegression.sql" />
 	<None Include="Security\ProvisionGrafanaReader.sql" />
 	<None Include="Security\ProvisionReportingSchema.sql" />
@@ -146,6 +148,10 @@
 
 	<!-- Core Metadata Tables -->
 	<Build Include="Tables\Core\DatabaseConfig.sql" />
+    <Build Include="Tables\Core\CollectionCredential.sql" />
+    <Build Include="Tables\Core\CollectionEndpoint.sql" />
+    <Build Include="Tables\Core\CollectionRetentionPolicy.sql" />
+    <Build Include="Tables\Core\CollectionSource.sql" />
 	<Build Include="Tables\Core\RunMetadata.sql" />
 
 	<!-- QueryStore Archive Tables -->
@@ -177,6 +183,7 @@
     <Build Include="StoredProcedures\DatabaseProject\usp_GetArchiveSummary.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_InitializeDatabase.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_ManagePartitions.sql" />
+    <Build Include="StoredProcedures\DatabaseProject\usp_SetRunProtection.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_MaterializeCanonicalQueryStoreStats.sql" />
     <Build Include="StoredProcedures\DatabaseProject\usp_PurgeExpiredArchives.sql" />
 
@@ -184,6 +191,7 @@
 	<Build Include="Schemas\qv_report.sql" />
 	<Build Include="Views\DatabaseProject\qv_report.periods.sql" />
 	<Build Include="Views\DatabaseProject\qv_report.query_period_metrics.sql" />
+	<Build Include="Views\DatabaseProject\qv_report.query_plan_interval_metrics.sql" />
 	<Build Include="Views\DatabaseProject\qv_report.period_metrics.sql" />
 	<Build Include="Views\DatabaseProject\qv_report.wait_period_metrics.sql" />
 	<Build Include="Views\DatabaseProject\qv_report.query_wait_period_metrics.sql" />

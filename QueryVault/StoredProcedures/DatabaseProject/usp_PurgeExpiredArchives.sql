@@ -4,13 +4,30 @@ CREATE PROCEDURE dbo.usp_PurgeExpiredArchives
 AS
 BEGIN
 	SET NOCOUNT ON;
-	SET XACT_ABORT ON;
+	-- NULL must not fall through the preview branch into destructive work.
+	-- Disable XACT_ABORT inside this procedure before rejecting the argument;
+	-- the caller's SET option is restored automatically when control returns.
+	IF @DryRun IS NULL
+	BEGIN
+		SET XACT_ABORT OFF;
+		RAISERROR ('DryRun cannot be NULL; specify 1 for preview or 0 for deletion.', 16, 1);
+		RETURN -1;
+	END;
+	-- A caller may use purge inside a wider reversible maintenance transaction.
+	-- Savepoints must remain usable after expected statement failures. Procedure
+	-- SET options are restored when control returns to the caller.
+	DECLARE @CallerOwnsTransaction BIT = CASE WHEN @@TRANCOUNT > 0 THEN 1 ELSE 0 END;
+	IF @CallerOwnsTransaction = 1
+		SET XACT_ABORT OFF;
+	ELSE
+		SET XACT_ABORT ON;
 
 	DECLARE @EffectiveAsOf DATETIME2(7) = ISNULL(@AsOfDateTime, SYSUTCDATETIME());
 	DECLARE @RunID INT;
 	DECLARE @ErrorMessage NVARCHAR(4000);
 	DECLARE @FailureCount INT = 0;
 	DECLARE @PurgedCount INT = 0;
+	DECLARE @LockResult INT;
 
 	DECLARE @Candidates TABLE
 	(
@@ -57,7 +74,21 @@ BEGIN
 	WHILE @@FETCH_STATUS = 0
 	BEGIN
 		BEGIN TRY
-			BEGIN TRANSACTION;
+			IF @CallerOwnsTransaction = 0
+				BEGIN TRANSACTION;
+			ELSE
+				SAVE TRANSACTION PurgeExpiredRun;
+
+			-- All lifecycle paths take the application lock before RunMetadata
+			-- row locks, including direct SwitchOut/Truncate/MergeBoundary calls.
+			EXEC @LockResult = sys.sp_getapplock
+				@Resource = N'QueryVault.PF_RunID',
+				@LockMode = N'Exclusive',
+				@LockOwner = N'Transaction',
+				@LockTimeout = 30000;
+
+			IF @LockResult < 0
+				THROW 51054, 'Could not acquire the QueryVault partition lifecycle lock.', 1;
 
 			-- Recheck eligibility while holding an update lock. This prevents a
 			-- concurrently protected run from being removed after selection.
@@ -94,11 +125,22 @@ BEGIN
 				SET @PurgedCount += 1;
 			END;
 
-			COMMIT TRANSACTION;
+			IF @CallerOwnsTransaction = 0
+				COMMIT TRANSACTION;
 		END TRY
 		BEGIN CATCH
-			IF XACT_STATE() <> 0
+			IF @CallerOwnsTransaction = 0 AND XACT_STATE() <> 0
 				ROLLBACK TRANSACTION;
+			ELSE IF @CallerOwnsTransaction = 1 AND XACT_STATE() = 1
+				ROLLBACK TRANSACTION PurgeExpiredRun;
+			ELSE IF @CallerOwnsTransaction = 1
+			BEGIN
+				-- Do not destroy the caller's transaction. An unrecoverable error
+				-- (for example, a deadlock victim) must return to its owner now.
+				CLOSE purge_cursor;
+				DEALLOCATE purge_cursor;
+				THROW;
+			END;
 
 			SET @ErrorMessage = ERROR_MESSAGE();
 			SET @FailureCount += 1;

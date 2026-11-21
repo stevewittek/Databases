@@ -29,6 +29,10 @@ jobs:
         run: >-
           ./QueryVault/Tests/TestRepositoryContracts.ps1
 
+      - name: Test source readiness guards offline
+        shell: pwsh
+        run: ./QueryVault/Tests/TestQueryStoreReadiness.ps1
+
       - name: Validate PowerShell syntax
         shell: pwsh
         run: |

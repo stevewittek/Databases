@@ -94,6 +94,18 @@ GO
 :r "$(ProjectDir)Tables\Core\DatabaseConfig.sql"
 GO
 
+:r "$(ProjectDir)Tables\Core\CollectionCredential.sql"
+GO
+
+:r "$(ProjectDir)Tables\Core\CollectionEndpoint.sql"
+GO
+
+:r "$(ProjectDir)Tables\Core\CollectionRetentionPolicy.sql"
+GO
+
+:r "$(ProjectDir)Tables\Core\CollectionSource.sql"
+GO
+
 :r "$(ProjectDir)Scripts\MigrateRunPartitioning.sql"
 GO
 
@@ -192,6 +204,10 @@ GO
 
 :r "$(ProjectDir)StoredProcedures\usp_ManagePartitions.sql"
 GO
+:r "$(ProjectDir)Scripts\MigrateProtectionNote.sql"
+GO
+:r "$(ProjectDir)StoredProcedures\usp_SetRunProtection.sql"
+GO
 
 :r "$(ProjectDir)StoredProcedures\usp_InitializeDatabase.sql"
 GO
@@ -222,6 +238,8 @@ GO
 :r "$(ProjectDir)Views\qv_report.periods.sql"
 GO
 :r "$(ProjectDir)Views\qv_report.query_period_metrics.sql"
+
+:r "$(ProjectDir)Views\qv_report.query_plan_interval_metrics.sql"
 GO
 :r "$(ProjectDir)Views\qv_report.period_metrics.sql"
 GO

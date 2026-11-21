@@ -17,7 +17,7 @@ $namespace = [System.Xml.XmlNamespaceManager]::new($project.NameTable)
 $namespace.AddNamespace("msb", $project.Project.NamespaceURI)
 $buildItems = @($project.SelectNodes("//msb:Build", $namespace))
 
-Assert-Condition ($buildItems.Count -eq 40) "Expected 40 canonical SQL build items; found $($buildItems.Count)."
+Assert-Condition ($buildItems.Count -eq 46) "Expected 46 canonical SQL build items; found $($buildItems.Count)."
 
 foreach ($item in $buildItems) {
     $relativePath = [string]$item.Include
@@ -40,6 +40,7 @@ $procedureNames = @(
     "usp_GetArchiveSummary.sql",
     "usp_InitializeDatabase.sql",
     "usp_ManagePartitions.sql",
+    "usp_SetRunProtection.sql",
     "usp_MaterializeCanonicalQueryStoreStats.sql",
     "usp_PurgeExpiredArchives.sql",
     "qv_report.usp_GetShowplanXml.sql"
@@ -66,6 +67,7 @@ foreach ($procedureName in $procedureNames) {
 $reportingViewNames = @(
     "qv_report.periods.sql",
     "qv_report.query_period_metrics.sql",
+    "qv_report.query_plan_interval_metrics.sql",
     "qv_report.period_metrics.sql",
     "qv_report.wait_period_metrics.sql",
     "qv_report.query_wait_period_metrics.sql",
@@ -168,6 +170,12 @@ foreach ($tableName in @(
 $queryMetricsView = Get-Content -LiteralPath (Join-Path $projectRoot "Views\qv_report.query_period_metrics.sql") -Raw
 $waitMetricsView = Get-Content -LiteralPath (Join-Path $projectRoot "Views\qv_report.wait_period_metrics.sql") -Raw
 Assert-Condition ($queryMetricsView.Contains("query_store_runtime_stats_canonical")) "Reporting runtime metrics do not prefer canonical observations."
+$planIntervalView = Get-Content -LiteralPath (Join-Path $projectRoot "Views\qv_report.query_plan_interval_metrics.sql") -Raw
+Assert-Condition ($planIntervalView.Contains("FROM dbo.query_store_runtime_stats_canonical")) "Plan/interval view must read canonical observations."
+Assert-Condition ($planIntervalView.Contains("baseline_eligible")) "Plan/interval view must expose baseline quality eligibility."
+Assert-Condition (-not $planIntervalView.Contains("FROM dbo.query_store_runtime_stats AS legacy")) "Plan/interval view must not promote unverified legacy data."
+Assert-Condition (Test-Path -LiteralPath (Join-Path $projectRoot "Tests\TestPlanIntervalReporting.sql") -PathType Leaf) "Plan/interval reconciliation test is missing."
+
 Assert-Condition ($waitMetricsView.Contains("query_store_wait_stats_canonical")) "Reporting wait metrics do not prefer canonical observations."
 
 $partitionProcedure = Get-Content -LiteralPath (Join-Path $projectRoot "StoredProcedures\usp_ManagePartitions.sql") -Raw
@@ -176,7 +184,7 @@ Assert-Condition ($partitionProcedure.Contains("Refusing to truncate a physical 
 Assert-Condition ($partitionProcedure.Contains("IF @StartedTransaction = 1 AND XACT_STATE() <> 0")) "Owned-transaction rollback guard is missing."
 Assert-Condition ($partitionProcedure.Contains("N'EnsureRunPartition'")) "Exact RunID partition allocation is missing."
 Assert-Condition ($partitionProcedure.Contains("N'MergeBoundary'")) "Obsolete RunID boundary merge is missing."
-Assert-Condition ($partitionProcedure.Contains("DoNotDelete = 1")) "Pinned-run partition protection is missing."
+Assert-Condition ($partitionProcedure.Contains("Pinned or preserved runs cannot be switched or truncated.")) "Pinned-run partition protection is missing."
 Assert-Condition ($partitionProcedure.Contains("@RunID + 1")) "Empty future RunID partition allocation is missing."
 Assert-Condition ($partitionProcedure.Contains("SqlServerPartitionLimit")) "SQL Server physical partition ceiling guard is missing."
 Assert-Condition ($partitionProcedure.Contains("migrate legacy overflow data")) "Nonempty legacy overflow split guard is missing."
@@ -198,6 +206,6 @@ Assert-Condition (Test-Path -LiteralPath (Join-Path $projectRoot "Scripts\Migrat
 [pscustomobject]@{
     TestResult = "PASS"
     CanonicalBuildItems = $buildItems.Count
-    ReportingContractItems = 10
+    ReportingContractItems = 11
     PartitionSafetyGuards = 10
 }

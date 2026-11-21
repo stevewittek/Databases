@@ -10,6 +10,15 @@ CREATE PROCEDURE dbo.usp_ArchiveQueryStore
 AS
 BEGIN
 	SET NOCOUNT ON;
+	-- This procedure owns its archive transaction. Never roll back a caller's work.
+	IF @@TRANCOUNT <> 0
+	BEGIN
+		-- Reject without dooming an XACT_ABORT ON caller. The caller's option
+		-- is restored automatically when control returns from this procedure.
+		SET XACT_ABORT OFF;
+		THROW 51006, 'Archive capture must run without an ambient transaction.', 1;
+	END;
+	SET XACT_ABORT ON;
 
 	DECLARE @RunID INT;
 	DECLARE @ErrorMessage NVARCHAR(4000);
@@ -21,12 +30,19 @@ BEGIN
 	DECLARE @QueryStoreFlushSeconds INT = 900;
 	DECLARE @ActualBatchSize INT;
 	DECLARE @ActualRetentionDays INT;
+	DECLARE @ActualRetentionDate DATETIME2(7);
 	DECLARE @RowCount BIGINT;
 	DECLARE @CompressionDelay INT;
 	DECLARE @RuntimeContributorRows BIGINT;
 	DECLARE @WaitContributorRows BIGINT;
-	DECLARE @RuntimeReplicaGroupProjection NVARCHAR(128);
-	DECLARE @WaitReplicaGroupProjection NVARCHAR(128);
+	DECLARE @HasWaitStats BIT = 0;
+	DECLARE @CapabilityNotes NVARCHAR(MAX);
+	DECLARE @SourceColumns TABLE (ObjectName SYSNAME, ColumnName SYSNAME);
+	DECLARE @OptionalColumns TABLE
+	(
+		ObjectName SYSNAME, AliasName SYSNAME, ColumnName SYSNAME,
+		SqlType NVARCHAR(30), TargetTable SYSNAME
+	);
 
 	BEGIN TRY
 		IF @LookbackMinutes IS NOT NULL AND @LookbackMinutes <= 0
@@ -85,18 +101,80 @@ BEGIN
 		IF @ActualEndDateTime < @ActualStartDateTime
 			THROW 51003, 'The requested archive range does not contain a safely flushed Query Store interval.', 1;
 
-		-- replica_group_id is available in SQL Server 2022 and later. It is
-		-- contributor provenance, not part of Microsoft's canonical grain.
-		SET @RuntimeReplicaGroupProjection = CASE
-			WHEN TRY_CONVERT(INT, SERVERPROPERTY('ProductMajorVersion')) >= 16
-				THEN N'rs.replica_group_id'
-			ELSE N'CONVERT(BIGINT, NULL)'
-		END;
-		SET @WaitReplicaGroupProjection = CASE
-			WHEN TRY_CONVERT(INT, SERVERPROPERTY('ProductMajorVersion')) >= 16
-				THEN N'ws.replica_group_id'
-			ELSE N'CONVERT(BIGINT, NULL)'
-		END;
+		-- Retention measures the age of captured data, not how recently an old
+		-- period was imported. Pins independently override expiry; retain the
+		-- date so an explicit unpin restores the original policy. The upper bound is SQL's
+		-- representable date horizon, not an arbitrary product retention limit.
+		IF @ActualRetentionDays IS NULL OR @ActualRetentionDays < 1
+			OR @ActualRetentionDays > DATEDIFF(DAY, @ActualEndDateTime, CONVERT(DATETIME2(7), '9999-12-31'))
+			THROW 51009, 'RetentionDays must be positive and fit after the captured period end.', 1;
+
+		SET @ActualRetentionDate = DATEADD(DAY, @ActualRetentionDays, @ActualEndDateTime);
+
+		-- Inspect the source catalog, not ProductMajorVersion: Azure versions and
+		-- backported features do not follow boxed-server version numbering.
+		SET @SQL = N'SELECT o.name, c.name
+			FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.all_objects AS o
+			JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.all_columns AS c ON c.object_id = o.object_id
+			JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.schemas AS s ON s.schema_id = o.schema_id
+			WHERE s.name = N''sys'' AND o.name IN
+			(N''query_store_plan'', N''query_store_runtime_stats'', N''query_store_wait_stats'', N''query_store_query'');';
+		INSERT INTO @SourceColumns EXEC sys.sp_executesql @SQL;
+		IF NOT EXISTS (SELECT 1 FROM @SourceColumns WHERE ObjectName = N'query_store_runtime_stats')
+			THROW 51007, 'Query Store catalog is unavailable. Check the source and database permissions.', 1;
+		SET @HasWaitStats = CASE WHEN EXISTS
+			(SELECT 1 FROM @SourceColumns WHERE ObjectName = N'query_store_wait_stats') THEN 1 ELSE 0 END;
+		INSERT INTO @OptionalColumns VALUES
+			(N'query_store_plan', N'p', N'plan_forcing_type', N'INT', N'query_store_plan'),
+			(N'query_store_plan', N'p', N'plan_forcing_type_desc', N'NVARCHAR(60)', N'query_store_plan'),
+			(N'query_store_plan', N'p', N'has_compile_replay_script', N'BIT', N'query_store_plan'),
+			(N'query_store_plan', N'p', N'is_optimized_plan_forcing_disabled', N'BIT', N'query_store_plan'),
+			(N'query_store_plan', N'p', N'plan_type', N'INT', N'query_store_plan'),
+			(N'query_store_plan', N'p', N'plan_type_desc', N'NVARCHAR(60)', N'query_store_plan'),
+			(N'query_store_runtime_stats', N'rs', N'avg_num_physical_io_reads', N'FLOAT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'last_num_physical_io_reads', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'min_num_physical_io_reads', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'max_num_physical_io_reads', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'stdev_num_physical_io_reads', N'FLOAT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'avg_log_bytes_used', N'FLOAT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'last_log_bytes_used', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'min_log_bytes_used', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'max_log_bytes_used', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'stdev_log_bytes_used', N'FLOAT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'avg_tempdb_space_used', N'FLOAT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'last_tempdb_space_used', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'min_tempdb_space_used', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'max_tempdb_space_used', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'stdev_tempdb_space_used', N'FLOAT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'avg_page_server_io_reads', N'FLOAT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'last_page_server_io_reads', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'min_page_server_io_reads', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'max_page_server_io_reads', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'stdev_page_server_io_reads', N'FLOAT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_runtime_stats', N'rs', N'replica_group_id', N'BIGINT', N'query_store_runtime_stats_contributor'),
+			(N'query_store_wait_stats', N'ws', N'replica_group_id', N'BIGINT', N'query_store_wait_stats_contributor'),
+			(N'query_store_query', N'q', N'is_clouddb_internal_query', N'BIT', N'query_store_query');
+
+		-- Old archive schemas used NOT NULL for newer plan features. Require a
+		-- reviewed schema upgrade instead of recording false zeros for missing data.
+		IF EXISTS
+		(
+			SELECT 1 FROM @OptionalColumns AS o
+			JOIN sys.columns AS t ON t.object_id = OBJECT_ID(N'dbo.' + o.TargetTable)
+				AND t.name = o.ColumnName AND t.is_nullable = 0
+			WHERE NOT EXISTS (SELECT 1 FROM @SourceColumns AS c
+				WHERE c.ObjectName = o.ObjectName AND c.ColumnName = o.ColumnName)
+		)
+			THROW 51008, 'Archive schema requires the nullable optional-metric upgrade. Review the deployment package before capturing older sources.', 1;
+
+		SELECT @CapabilityNotes = (
+			SELECT @HasWaitStats AS wait_stats_available,
+				JSON_QUERY((SELECT o.ObjectName AS [view], o.ColumnName AS [column]
+					FROM @OptionalColumns AS o
+					WHERE NOT EXISTS (SELECT 1 FROM @SourceColumns AS c
+						WHERE c.ObjectName = o.ObjectName AND c.ColumnName = o.ColumnName)
+					ORDER BY o.ObjectName, o.ColumnName FOR JSON PATH)) AS unavailable_columns
+			FOR JSON PATH, WITHOUT_ARRAY_WRAPPER);
 
 		PRINT 'Archiving QueryStore data from ' + @SourceDatabaseName;
 		PRINT 'Date Range: ' + CONVERT(VARCHAR(30), @ActualStartDateTime, 121) + ' to ' + CONVERT(VARCHAR(30), @ActualEndDateTime, 121);
@@ -110,6 +188,7 @@ BEGIN
 			EndDateTime,
 			DoNotDelete,
 			RetentionDate,
+			Comments,
 			RunStatus
 		)
 		VALUES
@@ -119,7 +198,8 @@ BEGIN
 			@ActualStartDateTime,
 			@ActualEndDateTime,
 			@DoNotDelete,
-			CASE WHEN @DoNotDelete = 0 THEN DATEADD(DAY, @ActualRetentionDays, SYSUTCDATETIME()) ELSE NULL END,
+			@ActualRetentionDate,
+			@CapabilityNotes,
 			'In Progress'
 		);
 
@@ -227,7 +307,7 @@ BEGIN
 			count_compiles, avg_compile_duration, last_compile_duration, avg_bind_duration, last_bind_duration,
 			avg_bind_cpu_time, last_bind_cpu_time, avg_optimize_duration, last_optimize_duration,
 			avg_optimize_cpu_time, last_optimize_cpu_time, avg_compile_memory_kb, last_compile_memory_kb,
-			max_compile_memory_kb, is_clouddb_internal_query
+			max_compile_memory_kb, q.[is_clouddb_internal_query]
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_query q
 		WHERE EXISTS (
 			SELECT 1
@@ -241,6 +321,24 @@ BEGIN
 			  AND i.end_time <= @EndDateTime
 		);
 		SET @RowsArchived = @@ROWCOUNT;';
+
+		-- Fixed allowlist only; no user-controlled identifiers or expressions.
+		DECLARE optional_projection_0 CURSOR LOCAL FAST_FORWARD FOR
+			SELECT o.AliasName + N'.[' + o.ColumnName + N']',
+				N'CONVERT(' + o.SqlType + N', NULL)'
+			FROM @OptionalColumns AS o
+			WHERE NOT EXISTS (SELECT 1 FROM @SourceColumns AS c
+				WHERE c.ObjectName = o.ObjectName AND c.ColumnName = o.ColumnName);
+		DECLARE @Token0 NVARCHAR(300), @NullExpression0 NVARCHAR(100);
+		OPEN optional_projection_0;
+		FETCH NEXT FROM optional_projection_0 INTO @Token0, @NullExpression0;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @SQL = REPLACE(@SQL, @Token0, @NullExpression0);
+			FETCH NEXT FROM optional_projection_0 INTO @Token0, @NullExpression0;
+		END;
+		CLOSE optional_projection_0;
+		DEALLOCATE optional_projection_0;
 
 		EXEC sys.sp_executesql @SQL,
 			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7), @RowsArchived BIGINT OUTPUT',
@@ -270,8 +368,8 @@ BEGIN
 			p.query_plan, p.is_online_index_plan, p.is_trivial_plan, p.is_parallel_plan, p.is_forced_plan,
 			p.is_natively_compiled, p.force_failure_count, p.last_force_failure_reason, p.last_force_failure_reason_desc,
 			p.count_compiles, p.initial_compile_start_time, p.last_compile_start_time, p.last_execution_time,
-			p.avg_compile_duration, p.last_compile_duration, p.plan_forcing_type, p.plan_forcing_type_desc,
-			p.has_compile_replay_script, p.is_optimized_plan_forcing_disabled, p.plan_type, p.plan_type_desc
+			p.avg_compile_duration, p.last_compile_duration, p.[plan_forcing_type], p.[plan_forcing_type_desc],
+			p.[has_compile_replay_script], p.[is_optimized_plan_forcing_disabled], p.[plan_type], p.[plan_type_desc]
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_plan p
 		WHERE EXISTS (
 			SELECT 1
@@ -283,6 +381,24 @@ BEGIN
 			  AND i.end_time <= @EndDateTime
 		);
 		SET @RowsArchived = @@ROWCOUNT;';
+
+		-- Fixed allowlist only; no user-controlled identifiers or expressions.
+		DECLARE optional_projection_1 CURSOR LOCAL FAST_FORWARD FOR
+			SELECT o.AliasName + N'.[' + o.ColumnName + N']',
+				N'CONVERT(' + o.SqlType + N', NULL)'
+			FROM @OptionalColumns AS o
+			WHERE NOT EXISTS (SELECT 1 FROM @SourceColumns AS c
+				WHERE c.ObjectName = o.ObjectName AND c.ColumnName = o.ColumnName);
+		DECLARE @Token1 NVARCHAR(300), @NullExpression1 NVARCHAR(100);
+		OPEN optional_projection_1;
+		FETCH NEXT FROM optional_projection_1 INTO @Token1, @NullExpression1;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @SQL = REPLACE(@SQL, @Token1, @NullExpression1);
+			FETCH NEXT FROM optional_projection_1 INTO @Token1, @NullExpression1;
+		END;
+		CLOSE optional_projection_1;
+		DEALLOCATE optional_projection_1;
 
 		EXEC sys.sp_executesql @SQL,
 			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7), @RowsArchived BIGINT OUTPUT',
@@ -330,17 +446,35 @@ BEGIN
 			rs.avg_dop, rs.last_dop, rs.min_dop, rs.max_dop, rs.stdev_dop,
 			rs.avg_query_max_used_memory, rs.last_query_max_used_memory, rs.min_query_max_used_memory, rs.max_query_max_used_memory, rs.stdev_query_max_used_memory,
 			rs.avg_rowcount, rs.last_rowcount, rs.min_rowcount, rs.max_rowcount, rs.stdev_rowcount,
-			rs.avg_num_physical_io_reads, rs.last_num_physical_io_reads, rs.min_num_physical_io_reads, rs.max_num_physical_io_reads, rs.stdev_num_physical_io_reads,
-			rs.avg_log_bytes_used, rs.last_log_bytes_used, rs.min_log_bytes_used, rs.max_log_bytes_used, rs.stdev_log_bytes_used,
-			rs.avg_tempdb_space_used, rs.last_tempdb_space_used, rs.min_tempdb_space_used, rs.max_tempdb_space_used, rs.stdev_tempdb_space_used,
-			rs.avg_page_server_io_reads, rs.last_page_server_io_reads, rs.min_page_server_io_reads, rs.max_page_server_io_reads, rs.stdev_page_server_io_reads,
-			' + @RuntimeReplicaGroupProjection + N'
+			rs.[avg_num_physical_io_reads], rs.[last_num_physical_io_reads], rs.[min_num_physical_io_reads], rs.[max_num_physical_io_reads], rs.[stdev_num_physical_io_reads],
+			rs.[avg_log_bytes_used], rs.[last_log_bytes_used], rs.[min_log_bytes_used], rs.[max_log_bytes_used], rs.[stdev_log_bytes_used],
+			rs.[avg_tempdb_space_used], rs.[last_tempdb_space_used], rs.[min_tempdb_space_used], rs.[max_tempdb_space_used], rs.[stdev_tempdb_space_used],
+			rs.[avg_page_server_io_reads], rs.[last_page_server_io_reads], rs.[min_page_server_io_reads], rs.[max_page_server_io_reads], rs.[stdev_page_server_io_reads],
+			rs.[replica_group_id]
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats rs
 		INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval i
 			ON i.runtime_stats_interval_id = rs.runtime_stats_interval_id
 		WHERE i.end_time > @StartDateTime
 		  AND i.end_time <= @EndDateTime;
 		SET @RowsArchived = @@ROWCOUNT;';
+
+		-- Fixed allowlist only; no user-controlled identifiers or expressions.
+		DECLARE optional_projection_2 CURSOR LOCAL FAST_FORWARD FOR
+			SELECT o.AliasName + N'.[' + o.ColumnName + N']',
+				N'CONVERT(' + o.SqlType + N', NULL)'
+			FROM @OptionalColumns AS o
+			WHERE NOT EXISTS (SELECT 1 FROM @SourceColumns AS c
+				WHERE c.ObjectName = o.ObjectName AND c.ColumnName = o.ColumnName);
+		DECLARE @Token2 NVARCHAR(300), @NullExpression2 NVARCHAR(100);
+		OPEN optional_projection_2;
+		FETCH NEXT FROM optional_projection_2 INTO @Token2, @NullExpression2;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @SQL = REPLACE(@SQL, @Token2, @NullExpression2);
+			FETCH NEXT FROM optional_projection_2 INTO @Token2, @NullExpression2;
+		END;
+		CLOSE optional_projection_2;
+		DEALLOCATE optional_projection_2;
 
 		EXEC sys.sp_executesql @SQL,
 			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7), @RowsArchived BIGINT OUTPUT',
@@ -353,6 +487,9 @@ BEGIN
 
 		-- Preserve every native wait contributor. Canonical wait averages are
 		-- derived later from additive wait totals and matching runtime counts.
+		SET @WaitContributorRows = 0;
+		IF @HasWaitStats = 1
+		BEGIN
 		PRINT 'Archiving query_store_wait_stats contributors...';
 		SET @SQL = N'
 		INSERT INTO dbo.query_store_wait_stats_contributor
@@ -365,13 +502,31 @@ BEGIN
 			ws.wait_stats_id, ws.plan_id, ws.runtime_stats_interval_id, ws.wait_category, ws.wait_category_desc,
 			ws.execution_type, ws.execution_type_desc, ws.total_query_wait_time_ms, ws.avg_query_wait_time_ms,
 			ws.last_query_wait_time_ms, ws.min_query_wait_time_ms, ws.max_query_wait_time_ms, ws.stdev_query_wait_time_ms,
-			' + @WaitReplicaGroupProjection + N'
+			ws.[replica_group_id]
 		FROM ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_wait_stats ws
 		INNER JOIN ' + QUOTENAME(@SourceDatabaseName) + N'.sys.query_store_runtime_stats_interval i
 			ON i.runtime_stats_interval_id = ws.runtime_stats_interval_id
 		WHERE i.end_time > @StartDateTime
 		  AND i.end_time <= @EndDateTime;
 		SET @RowsArchived = @@ROWCOUNT;';
+
+		-- Fixed allowlist only; no user-controlled identifiers or expressions.
+		DECLARE optional_projection_3 CURSOR LOCAL FAST_FORWARD FOR
+			SELECT o.AliasName + N'.[' + o.ColumnName + N']',
+				N'CONVERT(' + o.SqlType + N', NULL)'
+			FROM @OptionalColumns AS o
+			WHERE NOT EXISTS (SELECT 1 FROM @SourceColumns AS c
+				WHERE c.ObjectName = o.ObjectName AND c.ColumnName = o.ColumnName);
+		DECLARE @Token3 NVARCHAR(300), @NullExpression3 NVARCHAR(100);
+		OPEN optional_projection_3;
+		FETCH NEXT FROM optional_projection_3 INTO @Token3, @NullExpression3;
+		WHILE @@FETCH_STATUS = 0
+		BEGIN
+			SET @SQL = REPLACE(@SQL, @Token3, @NullExpression3);
+			FETCH NEXT FROM optional_projection_3 INTO @Token3, @NullExpression3;
+		END;
+		CLOSE optional_projection_3;
+		DEALLOCATE optional_projection_3;
 
 		EXEC sys.sp_executesql @SQL,
 			N'@RunID INT, @StartDateTime DATETIME2(7), @EndDateTime DATETIME2(7), @RowsArchived BIGINT OUTPUT',
@@ -381,6 +536,8 @@ BEGIN
 			@RowsArchived = @RowCount OUTPUT;
 		SET @WaitContributorRows = @RowCount;
 		PRINT 'Archived ' + CAST(@WaitContributorRows AS VARCHAR(20)) + ' native wait contributor rows';
+
+		END;
 
 		EXEC dbo.usp_MaterializeCanonicalQueryStoreStats
 			@RunID = @RunID,
@@ -441,7 +598,7 @@ BEGIN
 		END
 
 		SET @ErrorMessage = 'Error in usp_ArchiveQueryStore: ' + ERROR_MESSAGE();
-		RAISERROR(@ErrorMessage, 16, 1);
+		RAISERROR(N'%s', 16, 1, @ErrorMessage);
 		RETURN -1;
 	END CATCH
 END

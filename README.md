@@ -1,6 +1,14 @@
 # QueryVault
 
+**November 2026 local development update:** See the [compatibility audit](docs/COMPATIBILITY_AUDIT_2026_11_20.md)
+and [portable build/collector guide](docs/PORTABLE_BUILD.md). This candidate adds
+capability-aware capture, empty-database DACPAC packages and an experimental
+read-only exporter. Cross-server ingestion and full SQL Server/Azure certification
+are still pending; the historical release evidence below does not validate this candidate.
+
 A SQL Server database project for preserving, organizing, and analyzing historical Query Store data.
+
+**Review the proposed setup and daily use:** [Simple walkthrough and current status](docs/START_HERE.md) | [Functional and load test plan](docs/TEST_AND_LOAD_REVIEW.md). These distinguish today's local foundation from the unfinished multi-server workflow.
 
 QueryVault copies Query Store information from one or more source databases into a centralized archive. It is designed to support longer-term performance analysis when the source database's built-in Query Store retention window is not enough. The project combines T-SQL, SQL Server Data Tools project structure, PowerShell deployment helpers, table partitioning, clustered columnstore indexes, and SQL Server Agent automation.
 
@@ -226,3 +234,24 @@ Issues and pull requests are welcome. If proposing a change, please describe the
 ## License
 
 No open-source license has been selected yet. The source is publicly visible for review and portfolio purposes; reuse rights are not granted unless a license is added later.
+
+## Current implementation work
+
+[QueryVault GitHub Project](https://github.com/users/stevewittek/projects/10) tracks the
+standalone multi-source release. See [ROADMAP.md](ROADMAP.md),
+[connection registry](docs/CONNECTION_REGISTRY.md),
+[credential encryption](docs/CREDENTIAL_ENCRYPTION.md) and
+[Codex work packets](docs/CODEX_WORK_PACKETS.md).
+
+### Collection direction — November 21, 2026
+
+The first collector will use T-SQL with linked servers/OPENQUERY (#57). The earlier
+external collector/Always Encrypted setup is deferred; credential storage (#49)
+and Azure SQL archive scope are under review. See
+[the current design](docs/TSQL_COLLECTION_DIRECTION.md) before using older setup instructions.
+
+Read-only connection preparation is available through the
+[source readiness check](docs/SOURCE_READINESS.md) and
+[local linked-server inspector](docs/LINKED_SERVER_PREFLIGHT.md).
+The [Azure readiness report](docs/AZURE_SOURCE_READINESS_2026_11_21.md) distinguishes
+successful manual metadata access from the remaining unattended collection work.

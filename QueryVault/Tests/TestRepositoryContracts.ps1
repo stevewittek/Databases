@@ -17,7 +17,7 @@ $namespace = [System.Xml.XmlNamespaceManager]::new($project.NameTable)
 $namespace.AddNamespace("msb", $project.Project.NamespaceURI)
 $buildItems = @($project.SelectNodes("//msb:Build", $namespace))
 
-Assert-Condition ($buildItems.Count -eq 40) "Expected 40 canonical SQL build items; found $($buildItems.Count)."
+Assert-Condition ($buildItems.Count -eq 41) "Expected 41 canonical SQL build items; found $($buildItems.Count)."
 
 foreach ($item in $buildItems) {
     $relativePath = [string]$item.Include
@@ -66,6 +66,7 @@ foreach ($procedureName in $procedureNames) {
 $reportingViewNames = @(
     "qv_report.periods.sql",
     "qv_report.query_period_metrics.sql",
+    "qv_report.query_plan_interval_metrics.sql",
     "qv_report.period_metrics.sql",
     "qv_report.wait_period_metrics.sql",
     "qv_report.query_wait_period_metrics.sql",
@@ -198,6 +199,6 @@ Assert-Condition (Test-Path -LiteralPath (Join-Path $projectRoot "Scripts\Migrat
 [pscustomobject]@{
     TestResult = "PASS"
     CanonicalBuildItems = $buildItems.Count
-    ReportingContractItems = 10
+    ReportingContractItems = 11
     PartitionSafetyGuards = 10
 }

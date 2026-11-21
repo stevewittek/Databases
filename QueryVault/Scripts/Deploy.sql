@@ -222,6 +222,8 @@ GO
 :r "$(ProjectDir)Views\qv_report.periods.sql"
 GO
 :r "$(ProjectDir)Views\qv_report.query_period_metrics.sql"
+
+:r "$(ProjectDir)Views\qv_report.query_plan_interval_metrics.sql"
 GO
 :r "$(ProjectDir)Views\qv_report.period_metrics.sql"
 GO

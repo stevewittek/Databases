@@ -169,6 +169,12 @@ foreach ($tableName in @(
 $queryMetricsView = Get-Content -LiteralPath (Join-Path $projectRoot "Views\qv_report.query_period_metrics.sql") -Raw
 $waitMetricsView = Get-Content -LiteralPath (Join-Path $projectRoot "Views\qv_report.wait_period_metrics.sql") -Raw
 Assert-Condition ($queryMetricsView.Contains("query_store_runtime_stats_canonical")) "Reporting runtime metrics do not prefer canonical observations."
+$planIntervalView = Get-Content -LiteralPath (Join-Path $projectRoot "Views\qv_report.query_plan_interval_metrics.sql") -Raw
+Assert-Condition ($planIntervalView.Contains("FROM dbo.query_store_runtime_stats_canonical")) "Plan/interval view must read canonical observations."
+Assert-Condition ($planIntervalView.Contains("baseline_eligible")) "Plan/interval view must expose baseline quality eligibility."
+Assert-Condition (-not $planIntervalView.Contains("FROM dbo.query_store_runtime_stats AS legacy")) "Plan/interval view must not promote unverified legacy data."
+Assert-Condition (Test-Path -LiteralPath (Join-Path $projectRoot "Tests\TestPlanIntervalReporting.sql") -PathType Leaf) "Plan/interval reconciliation test is missing."
+
 Assert-Condition ($waitMetricsView.Contains("query_store_wait_stats_canonical")) "Reporting wait metrics do not prefer canonical observations."
 
 $partitionProcedure = Get-Content -LiteralPath (Join-Path $projectRoot "StoredProcedures\usp_ManagePartitions.sql") -Raw

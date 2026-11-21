@@ -64,7 +64,7 @@ Estimate storage from measured retained data per source/day, then add separately
 
 ## What can run now and what must wait
 
-The repository already contains local capture, aggregation, reporting, retention and two-session pin tests. The small source fixture is a smoke test, not a load generator. A repeatable workload driver and resource sampler still need implementation under ticket 12; this document does not claim they exist.
+The repository already contains local capture, aggregation, reporting, retention and two-session pin tests. The small source fixture is a smoke test, not a load generator. Bob Ward's [sqlsimtools](https://github.com/microsoft/sqlsimtools) is now being evaluated under ticket 12 as the workload generator. Prefer evaluating that existing tool before creating another runner. QueryVault-specific fixtures, resource sampling, collection coordination and correctness checks still need integration; tool availability alone does not complete this plan.
 
 Developer commands, from the repository root, without a database connection:
 

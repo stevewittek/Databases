@@ -30,3 +30,8 @@ The two catalog reads are observations made during this execution, not an atomic
 ## Validation scope
 
 Run `python3 -m unittest discover -s tests -p 'test_linked_server_preflight.py' -v` for static safety-contract checks. These enforce the restricted catalog reads, absence of remote execution or persistent changes, omission of sensitive fields, exact-name filtering, and explicit unverified outcomes. They are not SQL engine, catalog permission, or remote connectivity tests. A later authorized SQL lab can exercise invalid names, hidden entries, and visible mappings; this implementation task does not create links or logins to obtain those fixtures.
+
+A later coordinated run on Voyager1 SQL Server 2019 executed the published batch
+at `805dbaa` against one existing link and returned the expected local-only report.
+See [the dated Voyager evidence](https://github.com/stevewittek/Databases/blob/codex/queryvault-registry-foundation/docs/VOYAGER_READINESS_2026_11_21.md). This does not
+establish remote connectivity or the untested restricted-visibility cases.

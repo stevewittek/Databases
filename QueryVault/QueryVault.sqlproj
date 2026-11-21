@@ -128,6 +128,7 @@
     <None Include="Tests\TestQueryStoreAggregationGrain.sql" />
     <None Include="Tests\TestCanonicalQueryStoreAggregation.sql" />
     <None Include="Tests\TestReportingContract.sql" />
+    <None Include="Tests\TestPlanIntervalReporting.sql" />
     <None Include="Tests\TestReportingCanonicalRegression.sql" />
     <None Include="Tests\TestPartitionSafetyGuards.sql" />
     <None Include="Tests\TestProcedureCompilation.sql" />

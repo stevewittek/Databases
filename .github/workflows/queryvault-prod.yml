@@ -1,12 +1,11 @@
 name: QueryVault Production Deployment
 
+# Safety hold (QueryVault roadmap #28): the Voyager2 SQL database resides on
+# storage reported unreliable. An ordinary push must not trigger deployment.
+# Restore automated CD only after a verified off-host recovery and a healthy
+# replacement deployment target have been validated.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - master
-    paths:
-      - "QueryVault/**"
 
 permissions:
   contents: read

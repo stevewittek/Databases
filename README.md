@@ -1,5 +1,11 @@
 # QueryVault
 
+**November 2026 local development update:** See the [compatibility audit](docs/COMPATIBILITY_AUDIT_2026_11_20.md)
+and [portable build/collector guide](docs/PORTABLE_BUILD.md). This candidate adds
+capability-aware capture, empty-database DACPAC packages and an experimental
+read-only exporter. Cross-server ingestion and full SQL Server/Azure certification
+are still pending; the historical release evidence below does not validate this candidate.
+
 A SQL Server database project for preserving, organizing, and analyzing historical Query Store data.
 
 QueryVault copies Query Store information from one or more source databases into a centralized archive. It is designed to support longer-term performance analysis when the source database's built-in Query Store retention window is not enough. The project combines T-SQL, SQL Server Data Tools project structure, PowerShell deployment helpers, table partitioning, clustered columnstore indexes, and SQL Server Agent automation.

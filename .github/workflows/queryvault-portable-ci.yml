@@ -1,0 +1,36 @@
+name: QueryVault portable packages
+on:
+  pull_request:
+    paths: ["QueryVault/**", "tools/**", "collector/**", "tests/**", ".github/workflows/queryvault-portable-ci.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {target: "2016", storage: rowstore}
+          - {target: "2017", storage: columnstore}
+          - {target: "2019", storage: columnstore}
+          - {target: "2022", storage: columnstore}
+          - {target: "2025", storage: columnstore}
+          - {target: azure, storage: rowstore}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - run: python3 -m unittest discover -s tests -v
+      - run: python3 tools/package_queryvault.py --target '${{ matrix.target }}' --storage '${{ matrix.storage }}'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: queryvault-${{ matrix.target }}-${{ matrix.storage }}
+          path: |
+            artifacts/${{ matrix.target }}-${{ matrix.storage }}/*.zip
+            artifacts/${{ matrix.target }}-${{ matrix.storage }}/manifest.json

@@ -1,0 +1,59 @@
+name: QueryVault | Voyager 1
+run-name: 'QueryVault Voyager 1 | ${{ inputs.mode }}'
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Check the root archive or deploy this master commit'
+        type: choice
+        options: [inspect, deploy]
+        default: inspect
+        required: true
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: queryvault-voyager1
+  cancel-in-progress: false
+
+jobs:
+  request:
+    if: github.repository == 'stevewittek/Databases' && github.ref == 'refs/heads/master' && github.actor == 'stevewittek' && github.run_attempt == '1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check selected source revision
+        shell: pwsh
+        run: |
+          ./QueryVault/Tests/TestRepositoryContracts.ps1
+          ./tools/voyager1/Test-Voyager1DeploymentWorker.ps1
+      - name: Request work and wait for the desktop result
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QV_MODE: ${{ inputs.mode }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = "repos/$env:GITHUB_REPOSITORY"
+          $context = "queryvault/voyager1/$env:GITHUB_RUN_ID"
+          $runUrl = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          gh api --method POST "$root/statuses/$env:GITHUB_SHA" -f "context=$context" -f state=pending -f "description=Voyager 1 $env:QV_MODE requested" -f "target_url=$runUrl" | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Could not publish the request.' }
+          $until = [DateTime]::UtcNow.AddMinutes(45)
+          while ([DateTime]::UtcNow -lt $until) {
+            $response = gh api "$root/commits/$env:GITHUB_SHA/statuses?per_page=100"
+            if ($LASTEXITCODE -ne 0) { throw 'Could not read the desktop result.' }
+            $status = $response | ConvertFrom-Json | Where-Object context -CEQ $context | Select-Object -First 1
+            if ($null -ne $status -and $status.creator.login -ceq 'stevewittek') {
+              if ($status.state -eq 'success') { Write-Host $status.description; exit 0 }
+              if ($status.state -in @('failure','error')) { throw $status.description }
+            }
+            Start-Sleep -Seconds 20
+          }
+          throw 'No terminal receipt from Voyager 1. Check its task and local receipt before requesting another deployment.'

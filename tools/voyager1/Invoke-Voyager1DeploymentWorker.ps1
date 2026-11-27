@@ -66,13 +66,24 @@ function Set-Receipt {
     [IO.File]::Move($tempPath, $Path, $true)
 }
 
+function Test-UsesStatusToken {
+    param([string]$Path)
+    return ($Path -cmatch '^(statuses/[0-9a-f]{40}|commits/[0-9a-f]{40}/statuses(?:\?per_page=100)?)$')
+}
+
 function Invoke-GitHubApi {
     param([string]$Path, [string]$Method = 'Get', $Body)
     $argsForRest = @{
         Uri = "$script:ApiRoot/$Path"; Method = $Method
-        Authentication = 'Bearer'; Token = $script:StatusToken; TimeoutSec = 30
+        TimeoutSec = 30
         MaximumRedirection = 0
         Headers = @{ Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' }
+    }
+    # Workflow and ref metadata in this public repo can be read anonymously.
+    # Authenticating those endpoints would require broader token permissions.
+    if (Test-UsesStatusToken $Path) {
+        $argsForRest.Authentication = 'Bearer'
+        $argsForRest.Token = $script:StatusToken
     }
     if ($null -ne $Body) { $argsForRest.Body = $Body | ConvertTo-Json -Compress; $argsForRest.ContentType = 'application/json' }
     Invoke-RestMethod @argsForRest

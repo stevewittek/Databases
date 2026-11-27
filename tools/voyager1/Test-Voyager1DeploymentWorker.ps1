@@ -51,6 +51,10 @@ Assert-Equal (Test-RequestReady $status 'deploy' $now) $false 'stale request'
 $status.created_at = $now
 $status.creator.login = 'stevewittek'
 Assert-Equal (Test-RequestReady $status 'deploy' $now) $false 'status not from Actions'
+Assert-Equal (Test-UsesStatusToken "statuses/$($run.head_sha)") $true 'authenticated receipt'
+Assert-Equal (Test-UsesStatusToken "commits/$($run.head_sha)/statuses?per_page=100") $true 'authenticated status read'
+Assert-Equal (Test-UsesStatusToken 'actions/runs/767') $false 'public Actions API with status-only token'
+Assert-Equal (Test-UsesStatusToken 'git/ref/heads/master') $false 'public branch read with status-only token'
 
 $snapshot = @{
     MachineName='DESKTOP-CLVE7DV'; DatabaseName='QueryVaultDB'; MajorVersion=15; HasArchive=1

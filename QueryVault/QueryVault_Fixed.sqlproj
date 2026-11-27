@@ -147,6 +147,7 @@
 	<!-- Core Metadata Tables -->
 	<Build Include="Tables\Core\DatabaseConfig.sql" />
 	<Build Include="Tables\Core\RunMetadata.sql" />
+    <Build Include="Tables\Core\RunAnalysisContext.sql" />
 
 	<!-- QueryStore Archive Tables -->
 	<Build Include="Tables\QueryStore\query_store_plan.sql" />
@@ -190,5 +191,12 @@
 	<Build Include="Views\DatabaseProject\qv_report.query_plans.sql" />
 	<Build Include="Views\DatabaseProject\dbo.vw_QueryVaultStorageRecommendation.sql" />
 	<Build Include="StoredProcedures\DatabaseProject\qv_report.usp_GetShowplanXml.sql" />
+    <Build Include="Views\DatabaseProject\qv_report.query_interval_metrics.sql" />
+    <Build Include="Views\DatabaseProject\qv_report.query_identity.sql" />
+    <Build Include="Views\DatabaseProject\qv_report.run_quality.sql" />
+    <Build Include="Functions\DatabaseProject\qv_report.fn_CompareRunQuality.sql" />
+    <Build Include="Functions\DatabaseProject\qv_report.fn_CompareWaits.sql" />
+    <Build Include="Functions\DatabaseProject\qv_report.fn_CompareQueryWaits.sql" />
+    <Build Include="Functions\DatabaseProject\qv_report.fn_CompareRuns.sql" />
   </ItemGroup>
 </Project>

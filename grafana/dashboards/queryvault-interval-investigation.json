@@ -1,0 +1,463 @@
+{
+  "uid": "qv-interval-investigation",
+  "title": "QueryVault Interval Investigation",
+  "description": "Archived Query Store analytics. Uses the stable qv_report contract. No live-source queries or tuning actions.",
+  "tags": [
+    "QueryVault",
+    "Query Store",
+    "Analytics"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "utc",
+  "refresh": "",
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "server",
+        "label": "Source server",
+        "type": "query",
+        "datasource": {
+          "type": "mssql",
+          "uid": "queryvault-mssql"
+        },
+        "query": "SELECT DISTINCT source_server_name FROM qv_report.periods ORDER BY 1;",
+        "definition": "SELECT DISTINCT source_server_name FROM qv_report.periods ORDER BY 1;",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {},
+        "sort": 0,
+        "hide": 0
+      },
+      {
+        "name": "database",
+        "label": "Database",
+        "type": "query",
+        "datasource": {
+          "type": "mssql",
+          "uid": "queryvault-mssql"
+        },
+        "query": "SELECT DISTINCT source_database_name FROM qv_report.periods WHERE source_server_name=${server:sqlstring} ORDER BY 1;",
+        "definition": "SELECT DISTINCT source_database_name FROM qv_report.periods WHERE source_server_name=${server:sqlstring} ORDER BY 1;",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {},
+        "sort": 0,
+        "hide": 0
+      },
+      {
+        "name": "run",
+        "label": "Archived run",
+        "type": "query",
+        "datasource": {
+          "type": "mssql",
+          "uid": "queryvault-mssql"
+        },
+        "query": "SELECT CONCAT('#',period_id,' | ',CONVERT(varchar(19),period_start_utc,120),' UTC | ',period_name, ' | ',COALESCE(variant,'')) AS __text, period_id AS __value FROM qv_report.run_quality WHERE source_server_name=${server:sqlstring} AND source_database_name=${database:sqlstring} AND period_start_utc <= $__timeTo() AND period_end_utc >= $__timeFrom() AND period_status=N'Completed' AND 1=1 ORDER BY period_start_utc DESC,period_id DESC;",
+        "definition": "SELECT CONCAT('#',period_id,' | ',CONVERT(varchar(19),period_start_utc,120),' UTC | ',period_name, ' | ',COALESCE(variant,'')) AS __text, period_id AS __value FROM qv_report.run_quality WHERE source_server_name=${server:sqlstring} AND source_database_name=${database:sqlstring} AND period_start_utc <= $__timeTo() AND period_end_utc >= $__timeFrom() AND period_status=N'Completed' AND 1=1 ORDER BY period_start_utc DESC,period_id DESC;",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {},
+        "sort": 0,
+        "hide": 0
+      },
+      {
+        "name": "query",
+        "label": "Query",
+        "type": "query",
+        "datasource": {
+          "type": "mssql",
+          "uid": "queryvault-mssql"
+        },
+        "query": "SELECT N'All queries' AS __text, CONVERT(bigint,-1) AS __value UNION ALL SELECT CONCAT('#',query_id,' | ',LEFT(query_text_preview,100)),query_id FROM qv_report.query_period_metrics WHERE period_id=TRY_CONVERT(int,${run:sqlstring});",
+        "definition": "SELECT N'All queries' AS __text, CONVERT(bigint,-1) AS __value UNION ALL SELECT CONCAT('#',query_id,' | ',LEFT(query_text_preview,100)),query_id FROM qv_report.query_period_metrics WHERE period_id=TRY_CONVERT(int,${run:sqlstring});",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {},
+        "sort": 0,
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "Inside one captured run",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "All timeline samples belong to one RunID. CPU is cumulative worker time, not server CPU utilization. Duration is elapsed query time and can overlap across concurrent executions. Aborts and exceptions are separated below. Memory and tempdb values are per-execution averages; they are not peaks or spill counts. Empty panels mean no canonical observations."
+      },
+      "id": 1
+    },
+    {
+      "title": "Run quality",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 5
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT * FROM qv_report.run_quality WHERE period_id=TRY_CONVERT(int,${run:sqlstring});",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 2
+    },
+    {
+      "title": "Executions per second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT interval_start_utc AS time,SUM(execution_count)/NULLIF(MAX(interval_seconds),0) AS executions_per_second FROM qv_report.query_interval_metrics WHERE period_id=TRY_CONVERT(int,${run:sqlstring}) AND (TRY_CONVERT(bigint,${query:sqlstring})=-1 OR query_id=TRY_CONVERT(bigint,${query:sqlstring})) GROUP BY interval_start_utc ORDER BY time;",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 3
+    },
+    {
+      "title": "Execution-weighted latency",
+      "type": "timeseries",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 9,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 2,
+            "fillOpacity": 8,
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT interval_start_utc AS time,SUM(total_duration_ms)/NULLIF(SUM(execution_count),0) AS avg_duration_ms,MAX(max_duration_ms) AS max_duration_ms FROM qv_report.query_interval_metrics WHERE period_id=TRY_CONVERT(int,${run:sqlstring}) AND (TRY_CONVERT(bigint,${query:sqlstring})=-1 OR query_id=TRY_CONVERT(bigint,${query:sqlstring})) GROUP BY interval_start_utc ORDER BY time;",
+          "format": "time_series"
+        }
+      ],
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 4
+    },
+    {
+      "title": "CPU and logical I/O",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 17,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT interval_start_utc,SUM(execution_count) AS executions,SUM(total_cpu_ms) AS cpu_ms,SUM(total_cpu_ms)/NULLIF(SUM(execution_count),0) AS avg_cpu_ms,SUM(total_logical_reads) AS logical_reads_pages FROM qv_report.query_interval_metrics WHERE period_id=TRY_CONVERT(int,${run:sqlstring}) AND (TRY_CONVERT(bigint,${query:sqlstring})=-1 OR query_id=TRY_CONVERT(bigint,${query:sqlstring})) GROUP BY interval_start_utc ORDER BY interval_start_utc;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 5
+    },
+    {
+      "title": "Execution outcomes",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 17,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT execution_type,execution_type_desc,SUM(execution_count) AS executions,SUM(total_duration_ms) AS duration_ms FROM qv_report.query_interval_metrics WHERE period_id=TRY_CONVERT(int,${run:sqlstring}) AND (TRY_CONVERT(bigint,${query:sqlstring})=-1 OR query_id=TRY_CONVERT(bigint,${query:sqlstring})) GROUP BY execution_type,execution_type_desc ORDER BY execution_type;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 6
+    },
+    {
+      "title": "Memory, tempdb and log per execution",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 26,
+        "w": 24,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT TOP (100) query_id,plan_id,SUM(execution_count) AS executions,SUM(avg_max_used_memory_kb*execution_count)/NULLIF(SUM(CASE WHEN avg_max_used_memory_kb IS NOT NULL THEN execution_count END),0) AS avg_max_used_memory_kb,SUM(avg_tempdb_space_kb*execution_count)/NULLIF(SUM(CASE WHEN avg_tempdb_space_kb IS NOT NULL THEN execution_count END),0) AS avg_tempdb_space_kb,SUM(avg_log_bytes_used*execution_count)/NULLIF(SUM(CASE WHEN avg_log_bytes_used IS NOT NULL THEN execution_count END),0) AS avg_log_bytes_used FROM qv_report.query_interval_metrics WHERE period_id=TRY_CONVERT(int,${run:sqlstring}) AND (TRY_CONVERT(bigint,${query:sqlstring})=-1 OR query_id=TRY_CONVERT(bigint,${query:sqlstring})) GROUP BY query_id,plan_id ORDER BY avg_tempdb_space_kb DESC,query_id;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 7
+    },
+    {
+      "title": "Plan inventory",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 35,
+        "w": 24,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT period_id,query_id,plan_id,query_plan_hash_hex,is_forced_plan,plan_type_desc FROM qv_report.query_plans WHERE period_id=TRY_CONVERT(int,${run:sqlstring}) AND (TRY_CONVERT(bigint,${query:sqlstring})=-1 OR query_id=TRY_CONVERT(bigint,${query:sqlstring})) ORDER BY query_id,plan_id;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 8
+    }
+  ],
+  "links": [
+    {
+      "title": "QueryVault dashboards",
+      "type": "dashboards",
+      "tags": [
+        "QueryVault"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    }
+  ]
+}

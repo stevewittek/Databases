@@ -103,13 +103,19 @@ VALUES
 ('Reporting','V','qv_report','periods'),('Reporting','V','qv_report','query_period_metrics'),
 ('Reporting','V','qv_report','period_metrics'),('Reporting','V','qv_report','wait_period_metrics'),
 ('Reporting','V','qv_report','query_wait_period_metrics'),('Reporting','V','qv_report','query_plans'),
-('Reporting','P','qv_report','usp_GetShowplanXml');
+('Reporting','P','qv_report','usp_GetShowplanXml'),
+('Analytics','U','dbo','RunAnalysisContext'),
+('Analytics','V','qv_report','run_quality'),('Analytics','V','qv_report','query_identity'),
+('Analytics','V','qv_report','query_interval_metrics'),
+('Analytics','IF','qv_report','fn_CompareRunQuality'),('Analytics','IF','qv_report','fn_CompareRuns'),
+('Analytics','IF','qv_report','fn_CompareWaits'),('Analytics','IF','qv_report','fn_CompareQueryWaits');
 
 SELECT
   (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Core' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingCoreObjectCount,
   (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Canonical' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingCanonicalObjectCount,
   (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Reporting' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingReportingObjectCount,
   (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Lifecycle' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingLifecycleObjectCount,
+  (SELECT COUNT(*) FROM @Expected AS e WHERE e.ContractName='Analytics' AND OBJECT_ID(QUOTENAME(e.SchemaName)+'.'+QUOTENAME(e.ObjectName),e.ObjectType) IS NULL) AS MissingAnalyticsObjectCount,
   CASE WHEN SCHEMA_ID(N'qv_report') IS NULL THEN 0 ELSE 1 END AS ReportSchemaExists,
   CASE WHEN EXISTS (SELECT 1 FROM sys.schemas AS s WHERE s.name=N'qv_report' AND USER_NAME(s.principal_id)=N'dbo') THEN 1 ELSE 0 END AS ReportSchemaIsDboOwned,
   (SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped=0) AS UserTableCount,
@@ -149,7 +155,7 @@ JOIN sys.indexes AS i ON i.object_id=t.object_id
 JOIN sys.dm_db_partition_stats AS ps ON ps.object_id=i.object_id AND ps.index_id=i.index_id
 WHERE t.name IN
 (
- N'DatabaseConfig',N'RunMetadata',N'query_store_query',N'query_store_query_text',N'query_store_plan',
+ N'DatabaseConfig',N'RunMetadata',N'RunAnalysisContext',N'query_store_query',N'query_store_query_text',N'query_store_plan',
  N'query_store_runtime_stats',N'query_store_runtime_stats_interval',N'query_store_wait_stats',
  N'query_store_runtime_stats_contributor',N'query_store_runtime_stats_canonical',
  N'query_store_wait_stats_contributor',N'query_store_wait_stats_canonical'
@@ -222,6 +228,7 @@ ORDER BY j.name,s.name;
 		MissingCanonicalObjectCount = [int]$objects.MissingCanonicalObjectCount
 		MissingReportingObjectCount = [int]$objects.MissingReportingObjectCount
 		MissingLifecycleObjectCount = [int]$objects.MissingLifecycleObjectCount
+        MissingAnalyticsObjectCount = [int]$objects.MissingAnalyticsObjectCount
 		ReportSchemaExists = [bool]$objects.ReportSchemaExists
 		ReportSchemaIsDboOwned = [bool]$objects.ReportSchemaIsDboOwned
 		UserTableCount = [int]$objects.UserTableCount
@@ -334,6 +341,7 @@ if ($Mode -eq "Pre") {
 Assert-Condition (Test-Path -LiteralPath $BaselinePath -PathType Leaf) "Baseline file not found: $BaselinePath"
 Assert-Condition ($snapshot.MissingCanonicalObjectCount -eq 0) "One or more canonical aggregation objects are missing."
 Assert-Condition ($snapshot.MissingReportingObjectCount -eq 0) "One or more required qv_report objects are missing."
+Assert-Condition ($snapshot.MissingAnalyticsObjectCount -eq 0) "One or more analytics reporting objects are missing."
 Assert-Condition ($snapshot.MissingLifecycleObjectCount -eq 0) "One or more required RunID lifecycle objects are missing."
 Assert-Condition $snapshot.LifecycleConfigColumnsExist "One or more required RunID lifecycle configuration columns are missing."
 Assert-Condition ($snapshot.InvalidLifecycleConfigCount -eq 0) "DatabaseConfig contains invalid RunID lifecycle settings."

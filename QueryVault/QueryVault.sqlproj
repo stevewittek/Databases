@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -136,6 +136,7 @@
   <ItemGroup>
     <Build Include="Tables\Core\DatabaseConfig.sql" />
     <Build Include="Tables\Core\RunMetadata.sql" />
+    <Build Include="Tables\Core\RunAnalysisContext.sql" />
     <Build Include="Tables\PartitionMaintenance\query_store_plan_PartitionMaintenance.sql" />
     <Build Include="Tables\PartitionMaintenance\query_store_query_PartitionMaintenance.sql" />
     <Build Include="Tables\PartitionMaintenance\query_store_query_text_PartitionMaintenance.sql" />
@@ -173,6 +174,13 @@
     <Build Include="Views\DatabaseProject\qv_report.query_wait_period_metrics.sql" />
     <Build Include="Views\DatabaseProject\qv_report.query_plans.sql" />
     <Build Include="Views\DatabaseProject\dbo.vw_QueryVaultStorageRecommendation.sql" />
+    <Build Include="Views\DatabaseProject\qv_report.run_quality.sql" />
+    <Build Include="Views\DatabaseProject\qv_report.query_identity.sql" />
+    <Build Include="Views\DatabaseProject\qv_report.query_interval_metrics.sql" />
+    <Build Include="Functions\DatabaseProject\qv_report.fn_CompareRunQuality.sql" />
+    <Build Include="Functions\DatabaseProject\qv_report.fn_CompareRuns.sql" />
+    <Build Include="Functions\DatabaseProject\qv_report.fn_CompareWaits.sql" />
+    <Build Include="Functions\DatabaseProject\qv_report.fn_CompareQueryWaits.sql" />
     <Build Include="StoredProcedures\DatabaseProject\qv_report.usp_GetShowplanXml.sql" />
   </ItemGroup>
 </Project>

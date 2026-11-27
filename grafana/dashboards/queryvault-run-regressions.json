@@ -1,0 +1,1002 @@
+{
+  "uid": "qv-run-regressions",
+  "title": "QueryVault Run Regressions",
+  "description": "Archived Query Store analytics. Uses the stable qv_report contract. No live-source queries or tuning actions.",
+  "tags": [
+    "QueryVault",
+    "Query Store",
+    "Analytics"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "timezone": "utc",
+  "refresh": "",
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "annotations": {
+    "list": []
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "server",
+        "label": "Source server",
+        "type": "query",
+        "datasource": {
+          "type": "mssql",
+          "uid": "queryvault-mssql"
+        },
+        "query": "SELECT DISTINCT source_server_name FROM qv_report.periods ORDER BY 1;",
+        "definition": "SELECT DISTINCT source_server_name FROM qv_report.periods ORDER BY 1;",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {},
+        "sort": 0,
+        "hide": 0
+      },
+      {
+        "name": "database",
+        "label": "Database",
+        "type": "query",
+        "datasource": {
+          "type": "mssql",
+          "uid": "queryvault-mssql"
+        },
+        "query": "SELECT DISTINCT source_database_name FROM qv_report.periods WHERE source_server_name=${server:sqlstring} ORDER BY 1;",
+        "definition": "SELECT DISTINCT source_database_name FROM qv_report.periods WHERE source_server_name=${server:sqlstring} ORDER BY 1;",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {},
+        "sort": 0,
+        "hide": 0
+      },
+      {
+        "name": "candidate",
+        "label": "After / candidate run",
+        "type": "query",
+        "datasource": {
+          "type": "mssql",
+          "uid": "queryvault-mssql"
+        },
+        "query": "SELECT CONCAT('#',period_id,' | ',CONVERT(varchar(19),period_start_utc,120),' UTC | ',period_name, ' | ',COALESCE(variant,'')) AS __text, period_id AS __value FROM qv_report.run_quality WHERE source_server_name=${server:sqlstring} AND source_database_name=${database:sqlstring} AND period_start_utc <= $__timeTo() AND period_end_utc >= $__timeFrom() AND period_status=N'Completed' AND 1=1 ORDER BY period_start_utc DESC,period_id DESC;",
+        "definition": "SELECT CONCAT('#',period_id,' | ',CONVERT(varchar(19),period_start_utc,120),' UTC | ',period_name, ' | ',COALESCE(variant,'')) AS __text, period_id AS __value FROM qv_report.run_quality WHERE source_server_name=${server:sqlstring} AND source_database_name=${database:sqlstring} AND period_start_utc <= $__timeTo() AND period_end_utc >= $__timeFrom() AND period_status=N'Completed' AND 1=1 ORDER BY period_start_utc DESC,period_id DESC;",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {},
+        "sort": 0,
+        "hide": 0
+      },
+      {
+        "name": "baseline",
+        "label": "Before / baseline run",
+        "type": "query",
+        "datasource": {
+          "type": "mssql",
+          "uid": "queryvault-mssql"
+        },
+        "query": "SELECT CONCAT('#',period_id,' | ',CONVERT(varchar(19),period_start_utc,120),' UTC | ',period_name, ' | ',COALESCE(variant,'')) AS __text, period_id AS __value FROM qv_report.run_quality WHERE source_server_name=${server:sqlstring} AND source_database_name=${database:sqlstring} AND period_start_utc <= $__timeTo() AND period_end_utc >= $__timeFrom() AND period_status=N'Completed' AND 1=1 AND period_id<>TRY_CONVERT(int,${candidate:sqlstring}) AND captured_end_utc<=(SELECT captured_start_utc FROM qv_report.run_quality WHERE period_id=TRY_CONVERT(int,${candidate:sqlstring})) ORDER BY period_start_utc DESC,period_id DESC;",
+        "definition": "SELECT CONCAT('#',period_id,' | ',CONVERT(varchar(19),period_start_utc,120),' UTC | ',period_name, ' | ',COALESCE(variant,'')) AS __text, period_id AS __value FROM qv_report.run_quality WHERE source_server_name=${server:sqlstring} AND source_database_name=${database:sqlstring} AND period_start_utc <= $__timeTo() AND period_end_utc >= $__timeFrom() AND period_status=N'Completed' AND 1=1 AND period_id<>TRY_CONVERT(int,${candidate:sqlstring}) AND captured_end_utc<=(SELECT captured_start_utc FROM qv_report.run_quality WHERE period_id=TRY_CONVERT(int,${candidate:sqlstring})) ORDER BY period_start_utc DESC,period_id DESC;",
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "options": [],
+        "current": {},
+        "sort": 0,
+        "hide": 0
+      },
+      {
+        "name": "min_executions",
+        "label": "Minimum executions each run",
+        "type": "custom",
+        "query": "10,1,50,100,1000",
+        "options": [],
+        "current": {
+          "text": "10",
+          "value": "10"
+        },
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "name": "regression_pct",
+        "label": "Regression threshold %",
+        "type": "custom",
+        "query": "20,10,30,50,100",
+        "options": [],
+        "current": {
+          "text": "20",
+          "value": "20"
+        },
+        "multi": false,
+        "includeAll": false
+      }
+    ]
+  },
+  "panels": [
+    {
+      "title": "Read this comparison",
+      "type": "text",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 4
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "Choose the date range, source and two run IDs. **After minus before** is used for deltas. Rates use captured Query Store interval time. Average latency identifies slower executions; totals also reflect frequency. Identity continuity is operator-confirmed only when both runs share a recorded epoch. New or absent queries are not scored as regressions. Plan inventory changes are investigation leads, not proof of cause. No percentiles are inferred from aggregate Query Store data."
+      },
+      "id": 1
+    },
+    {
+      "title": "Comparison readiness",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Inspect candidate query timeline",
+                    "url": "/d/qv-interval-investigation/queryvault-interval-investigation?var-server=${server:percentencode}&var-database=${database:percentencode}&var-run=${candidate:percentencode}&var-query=${__data.fields.query_id}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT comparison_state,identity_confidence,unequal_windows,same_experiment,time_direction,baseline_wait_state,candidate_wait_state FROM qv_report.fn_CompareRunQuality(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring}));",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 2
+    },
+    {
+      "title": "Queries above latency threshold",
+      "type": "stat",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT_BIG(*) AS regressed_queries FROM qv_report.fn_CompareRuns(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) WHERE match_state=N'MATCHED' AND baseline_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND candidate_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND avg_duration_delta_pct>=TRY_CONVERT(float,${regression_pct:sqlstring});",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "id": 3
+    },
+    {
+      "title": "Queries improved",
+      "type": "stat",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 6,
+        "y": 8,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT_BIG(*) AS improved_queries FROM qv_report.fn_CompareRuns(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) WHERE match_state=N'MATCHED' AND baseline_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND candidate_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND avg_duration_delta_pct<=-TRY_CONVERT(float,${regression_pct:sqlstring});",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "id": 4
+    },
+    {
+      "title": "Plan inventories changed",
+      "type": "stat",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT_BIG(*) AS changed_queries FROM qv_report.fn_CompareRuns(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) WHERE plan_inventory_changed=1;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "id": 5
+    },
+    {
+      "title": "Identity / membership changes",
+      "type": "stat",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 18,
+        "y": 8,
+        "w": 6,
+        "h": 4
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT_BIG(*) AS changed_queries FROM qv_report.fn_CompareRuns(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) WHERE match_state<>N'MATCHED';",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "auto",
+        "justifyMode": "auto",
+        "orientation": "auto"
+      },
+      "id": 6
+    },
+    {
+      "title": "Run context and data quality",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 24,
+        "h": 6
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Inspect candidate query timeline",
+                    "url": "/d/qv-interval-investigation/queryvault-interval-investigation?var-server=${server:percentencode}&var-database=${database:percentencode}&var-run=${candidate:percentencode}&var-query=${__data.fields.query_id}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT period_id,period_name,period_classification,experiment_name,workload_name,variant,deployment_label,period_start_utc,period_end_utc,captured_seconds,requested_seconds,interval_count,observation_state,is_comparison_ready,invalid_intervals,outside_window_intervals,overlapping_intervals,orphan_runtime_rows,missing_metadata_rows,orphan_wait_rows FROM qv_report.run_quality WHERE period_id IN (TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring}));",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 7
+    },
+    {
+      "title": "Top latency regressions by estimated extra duration",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 18,
+        "w": 24,
+        "h": 10
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Inspect candidate query timeline",
+                    "url": "/d/qv-interval-investigation/queryvault-interval-investigation?var-server=${server:percentencode}&var-database=${database:percentencode}&var-run=${candidate:percentencode}&var-query=${__data.fields.query_id}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT TOP (40) query_id,baseline_executions,candidate_executions,baseline_avg_duration_ms,candidate_avg_duration_ms,avg_duration_delta_pct,estimated_extra_duration_ms,avg_cpu_delta_pct,avg_reads_delta_pct,plan_inventory_changed,query_text_preview FROM qv_report.fn_CompareRuns(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) WHERE match_state=N'MATCHED' AND baseline_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND candidate_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND avg_duration_delta_pct>=TRY_CONVERT(float,${regression_pct:sqlstring}) ORDER BY estimated_extra_duration_ms DESC,query_id;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 8
+    },
+    {
+      "title": "Improvements",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Inspect candidate query timeline",
+                    "url": "/d/qv-interval-investigation/queryvault-interval-investigation?var-server=${server:percentencode}&var-database=${database:percentencode}&var-run=${candidate:percentencode}&var-query=${__data.fields.query_id}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT TOP (30) query_id,baseline_avg_duration_ms,candidate_avg_duration_ms,avg_duration_delta_pct,estimated_extra_duration_ms,query_text_preview FROM qv_report.fn_CompareRuns(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) WHERE match_state=N'MATCHED' AND baseline_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND candidate_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND avg_duration_delta_pct<=-TRY_CONVERT(float,${regression_pct:sqlstring}) ORDER BY estimated_extra_duration_ms,query_id;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 9
+    },
+    {
+      "title": "Frequency versus cost",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 28,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Inspect candidate query timeline",
+                    "url": "/d/qv-interval-investigation/queryvault-interval-investigation?var-server=${server:percentencode}&var-database=${database:percentencode}&var-run=${candidate:percentencode}&var-query=${__data.fields.query_id}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT TOP (30) query_id,baseline_executions_per_second,candidate_executions_per_second,baseline_cpu_ms_per_hour,candidate_cpu_ms_per_hour,baseline_total_duration_ms,candidate_total_duration_ms,avg_duration_delta_pct FROM qv_report.fn_CompareRuns(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) WHERE match_state=N'MATCHED' ORDER BY candidate_cpu_ms_per_hour DESC,query_id;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 10
+    },
+    {
+      "title": "Wait intensity by category",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Inspect candidate query timeline",
+                    "url": "/d/qv-interval-investigation/queryvault-interval-investigation?var-server=${server:percentencode}&var-database=${database:percentencode}&var-run=${candidate:percentencode}&var-query=${__data.fields.query_id}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT wait_category_desc,observation_state,baseline_wait_ms,candidate_wait_ms,baseline_wait_ms_per_hour,candidate_wait_ms_per_hour,baseline_wait_ms_per_execution,candidate_wait_ms_per_execution FROM qv_report.fn_CompareWaits(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) ORDER BY candidate_wait_ms DESC;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 11
+    },
+    {
+      "title": "New, absent or changed identity",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 37,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Inspect candidate query timeline",
+                    "url": "/d/qv-interval-investigation/queryvault-interval-investigation?var-server=${server:percentencode}&var-database=${database:percentencode}&var-run=${candidate:percentencode}&var-query=${__data.fields.query_id}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT TOP (50) query_id,match_state,baseline_executions,candidate_executions,query_text_preview FROM qv_report.fn_CompareRuns(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) WHERE match_state<>N'MATCHED' ORDER BY COALESCE(candidate_total_cpu_ms,baseline_total_cpu_ms) DESC,query_id;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 12
+    },
+    {
+      "title": "CPU regressions per execution",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 46,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Inspect candidate query timeline",
+                    "url": "/d/qv-interval-investigation/queryvault-interval-investigation?var-server=${server:percentencode}&var-database=${database:percentencode}&var-run=${candidate:percentencode}&var-query=${__data.fields.query_id}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT TOP (40) query_id,baseline_avg_cpu_ms,candidate_avg_cpu_ms,avg_cpu_delta_pct,baseline_executions,candidate_executions,query_text_preview FROM qv_report.fn_CompareRuns(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) WHERE match_state=N'MATCHED' AND baseline_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND candidate_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND avg_cpu_delta_pct>=TRY_CONVERT(float,${regression_pct:sqlstring}) ORDER BY (candidate_avg_cpu_ms-baseline_avg_cpu_ms)*candidate_executions DESC,query_id;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 13
+    },
+    {
+      "title": "Logical read regressions per execution",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 46,
+        "w": 12,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Inspect candidate query timeline",
+                    "url": "/d/qv-interval-investigation/queryvault-interval-investigation?var-server=${server:percentencode}&var-database=${database:percentencode}&var-run=${candidate:percentencode}&var-query=${__data.fields.query_id}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT TOP (40) query_id,baseline_avg_reads,candidate_avg_reads,avg_reads_delta_pct,baseline_executions,candidate_executions,query_text_preview FROM qv_report.fn_CompareRuns(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) WHERE match_state=N'MATCHED' AND baseline_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND candidate_executions>=TRY_CONVERT(int,${min_executions:sqlstring}) AND avg_reads_delta_pct>=TRY_CONVERT(float,${regression_pct:sqlstring}) ORDER BY (candidate_avg_reads-baseline_avg_reads)*candidate_executions DESC,query_id;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 14
+    },
+    {
+      "title": "Query wait regressions",
+      "type": "table",
+      "datasource": {
+        "type": "mssql",
+        "uid": "queryvault-mssql"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 55,
+        "w": 24,
+        "h": 9
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": {
+            "mode": "palette-classic"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "query_id"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Inspect candidate query timeline",
+                    "url": "/d/qv-interval-investigation/queryvault-interval-investigation?var-server=${server:percentencode}&var-database=${database:percentencode}&var-run=${candidate:percentencode}&var-query=${__data.fields.query_id}&from=${__from}&to=${__to}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "mssql",
+            "uid": "queryvault-mssql"
+          },
+          "editorMode": "code",
+          "rawQuery": true,
+          "rawSql": "SELECT TOP (50) * FROM qv_report.fn_CompareQueryWaits(TRY_CONVERT(int,${baseline:sqlstring}),TRY_CONVERT(int,${candidate:sqlstring})) ORDER BY wait_per_execution_delta_ms DESC,query_id,wait_category;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "id": 15
+    }
+  ],
+  "links": [
+    {
+      "title": "QueryVault dashboards",
+      "type": "dashboards",
+      "tags": [
+        "QueryVault"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    }
+  ]
+}

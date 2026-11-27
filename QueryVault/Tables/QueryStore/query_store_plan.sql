@@ -27,11 +27,11 @@ CREATE TABLE dbo.query_store_plan
 	last_execution_time DATETIMEOFFSET(7) NULL,
 	avg_compile_duration FLOAT NULL,
 	last_compile_duration BIGINT NULL,
-	plan_forcing_type INT NOT NULL,
+	plan_forcing_type INT NULL,
 	plan_forcing_type_desc NVARCHAR(60) NULL,
-	has_compile_replay_script BIT NOT NULL,
-	is_optimized_plan_forcing_disabled BIT NOT NULL,
-	plan_type INT NOT NULL,
+	has_compile_replay_script BIT NULL,
+	is_optimized_plan_forcing_disabled BIT NULL,
+	plan_type INT NULL,
 	plan_type_desc NVARCHAR(60) NULL,
 
 	CONSTRAINT PK_query_store_plan PRIMARY KEY NONCLUSTERED (RunID, plan_id)

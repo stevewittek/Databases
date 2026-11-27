@@ -91,6 +91,9 @@ GO
 :r "$(ProjectDir)Tables\Core\RunMetadata.sql"
 GO
 
+:r "$(ProjectDir)Tables\Core\RunAnalysisContext.sql"
+GO
+
 :r "$(ProjectDir)Tables\Core\DatabaseConfig.sql"
 GO
 
@@ -231,6 +234,27 @@ GO
 GO
 :r "$(ProjectDir)Views\qv_report.query_plans.sql"
 GO
+:r "$(ProjectDir)Views\qv_report.run_quality.sql"
+GO
+
+:r "$(ProjectDir)Views\qv_report.query_identity.sql"
+GO
+
+:r "$(ProjectDir)Views\qv_report.query_interval_metrics.sql"
+GO
+
+:r "$(ProjectDir)Functions\qv_report.fn_CompareRunQuality.sql"
+GO
+
+:r "$(ProjectDir)Functions\qv_report.fn_CompareRuns.sql"
+GO
+
+:r "$(ProjectDir)Functions\qv_report.fn_CompareWaits.sql"
+GO
+
+:r "$(ProjectDir)Functions\qv_report.fn_CompareQueryWaits.sql"
+GO
+
 :r "$(ProjectDir)StoredProcedures\qv_report.usp_GetShowplanXml.sql"
 GO
 :r "$(ProjectDir)Views\dbo.vw_QueryVaultStorageRecommendation.sql"

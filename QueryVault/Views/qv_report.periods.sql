@@ -39,7 +39,7 @@ AS
 				THEN N'COMPLETED'
 			ELSE N'LEGACY_UNVERIFIED'
 		END AS observation_state,
-		CAST(NULL AS NVARCHAR(100)) AS period_classification,
+		ac.Classification AS period_classification,
 		rm.DoNotDelete AS is_protected,
 		rm.RetentionDate AS retention_utc,
 		rm.RunStartTime AS archive_started_utc,
@@ -57,5 +57,6 @@ AS
 			+ ISNULL(rm.RowsArchived_RuntimeStats, 0)
 			+ ISNULL(rm.RowsArchived_RuntimeStatsInterval, 0)
 			+ ISNULL(rm.RowsArchived_WaitStats, 0)) AS archived_total_rows
-	FROM dbo.RunMetadata AS rm;
+	FROM dbo.RunMetadata AS rm
+	LEFT JOIN dbo.RunAnalysisContext AS ac ON ac.RunID = rm.RunID;
 GO

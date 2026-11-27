@@ -17,7 +17,7 @@ $namespace = [System.Xml.XmlNamespaceManager]::new($project.NameTable)
 $namespace.AddNamespace("msb", $project.Project.NamespaceURI)
 $buildItems = @($project.SelectNodes("//msb:Build", $namespace))
 
-Assert-Condition ($buildItems.Count -eq 40) "Expected 40 canonical SQL build items; found $($buildItems.Count)."
+Assert-Condition ($buildItems.Count -eq 48) "Expected 48 canonical SQL build items; found $($buildItems.Count)."
 
 foreach ($item in $buildItems) {
     $relativePath = [string]$item.Include
@@ -69,7 +69,10 @@ $reportingViewNames = @(
     "qv_report.period_metrics.sql",
     "qv_report.wait_period_metrics.sql",
     "qv_report.query_wait_period_metrics.sql",
-    "qv_report.query_plans.sql"
+    "qv_report.query_plans.sql",
+    "qv_report.run_quality.sql",
+    "qv_report.query_identity.sql",
+    "qv_report.query_interval_metrics.sql"
 )
 
 foreach ($viewName in $reportingViewNames) {

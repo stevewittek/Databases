@@ -1,3 +1,9 @@
+# Analytics candidate
+
+See [the analytics guide](ANALYTICS_GUIDE.md) for the three new dashboards,
+additive SQL upgrade and separate Grafana lab Compose configuration. Existing
+steps below describe the original four-dashboard deployment.
+
 # Grafana Setup for QueryVault
 
 ## Prerequisites

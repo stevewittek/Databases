@@ -52,6 +52,7 @@ $deploymentSteps = @(
 	@{ Name = "Partition Function"; Path = "Partitions/PartitionFunction.sql"; Kind = "Always" },
 	@{ Name = "Partition Scheme"; Path = "Partitions/PartitionScheme.sql"; Kind = "Always" },
 	@{ Name = "RunMetadata Table"; Path = "Tables/Core/RunMetadata.sql"; Kind = "Table"; Object = "RunMetadata" },
+	@{ Name = "Run analysis context"; Path = "Tables/Core/RunAnalysisContext.sql"; Kind = "Table"; Object = "RunAnalysisContext" },
 	@{ Name = "DatabaseConfig Table"; Path = "Tables/Core/DatabaseConfig.sql"; Kind = "Table"; Object = "DatabaseConfig" },
 	@{ Name = "Run partitioning configuration migration"; Path = "Scripts/MigrateRunPartitioning.sql"; Kind = "Always" },
 	@{ Name = "query_store_query Table"; Path = "Tables/QueryStore/query_store_query.sql"; Kind = "Table"; Object = "query_store_query" },
@@ -88,6 +89,13 @@ $deploymentSteps = @(
 	@{ Name = "qv_report.wait_period_metrics View"; Path = "Views/qv_report.wait_period_metrics.sql"; Kind = "View" },
 	@{ Name = "qv_report.query_wait_period_metrics View"; Path = "Views/qv_report.query_wait_period_metrics.sql"; Kind = "View" },
 	@{ Name = "qv_report.query_plans View"; Path = "Views/qv_report.query_plans.sql"; Kind = "View" },
+	@{ Name = "qv_report.run_quality"; Path = "Views/qv_report.run_quality.sql"; Kind = "View" },
+	@{ Name = "qv_report.query_identity"; Path = "Views/qv_report.query_identity.sql"; Kind = "View" },
+	@{ Name = "qv_report.query_interval_metrics"; Path = "Views/qv_report.query_interval_metrics.sql"; Kind = "View" },
+	@{ Name = "qv_report.fn_CompareRunQuality"; Path = "Functions/qv_report.fn_CompareRunQuality.sql"; Kind = "Function" },
+	@{ Name = "qv_report.fn_CompareRuns"; Path = "Functions/qv_report.fn_CompareRuns.sql"; Kind = "Function" },
+	@{ Name = "qv_report.fn_CompareWaits"; Path = "Functions/qv_report.fn_CompareWaits.sql"; Kind = "Function" },
+	@{ Name = "qv_report.fn_CompareQueryWaits"; Path = "Functions/qv_report.fn_CompareQueryWaits.sql"; Kind = "Function" },
 	@{ Name = "qv_report.usp_GetShowplanXml Procedure"; Path = "StoredProcedures/qv_report.usp_GetShowplanXml.sql"; Kind = "Procedure" },
 	@{ Name = "vw_QueryVaultStorageRecommendation View"; Path = "Views/dbo.vw_QueryVaultStorageRecommendation.sql"; Kind = "View" }
 )

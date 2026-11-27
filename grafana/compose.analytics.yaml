@@ -1,0 +1,29 @@
+name: queryvault-analytics-lab
+services:
+  grafana:
+    image: ${QV_GRAFANA_IMAGE:?Set a tested Grafana image tag or digest}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${QV_GRAFANA_PORT:-3031}:3000"
+    cpus: 1.0
+    mem_limit: 512m
+    environment:
+      GF_SECURITY_ADMIN_USER: ${QV_GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${QV_GRAFANA_ADMIN_PASSWORD:?Set a local admin password}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      QV_SQLSERVER_HOST: ${QV_SQLSERVER_HOST:?Set the SQL host reachable from the container}
+      QV_SQLSERVER_PORT: ${QV_SQLSERVER_PORT:-1433}
+      QV_SQLSERVER_DATABASE: ${QV_SQLSERVER_DATABASE:?Set the archive database}
+      QV_GRAFANA_SQL_USER: ${QV_GRAFANA_SQL_USER:?Set the restricted reporting user}
+      QV_GRAFANA_SQL_PASSWORD: ${QV_GRAFANA_SQL_PASSWORD:?Set the reporting password}
+    volumes:
+      - analytics-grafana-data:/var/lib/grafana
+      - ./provisioning:/etc/grafana/provisioning:ro
+      - ./dashboards:/var/lib/grafana/dashboards/queryvault:ro
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  analytics-grafana-data:
